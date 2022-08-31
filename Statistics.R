@@ -1,8 +1,19 @@
-################################
-################################
-###   Statistical analysis   ###
-################################
-################################
+library(dplyr)
+library(data.table)
+library(ggplot2)
+
+#================================#
+####         Load data        ####
+#================================#
+lapply(c("Data/sandeel.Rdata", "Data/School_EROS.Rdata", "Data/gps.Rdata"),load,.GlobalEnv)
+School_EROS.dt <- School.dt
+rm(School.dt)
+
+#====  LDA results   ===#
+lapply(c("Data/score.Rdata", "Data/coef.Rdata", "Data/confusion.matrix.Rdata", "Data/slda.lst.Rdata"),load,.GlobalEnv)
+#large data
+load("C:/Users/a37907/Desktop/Data/slda.lst.Rdata")
+#
 
 data <- rbind(sandeel.dt, School_EROS.dt[Frequency%in%200 & category%in%"SAND" & !area %in% "outside" ]) #rbind(sandeel.dt, School_EROS.dt[Frequency%in%200 & category%in%"SAND" & !area %in% "outside" ]) #sandeel.dt #& school_area >= median(School_EROS.dt$school_area)
 data$month <- strftime(data$YMD_time, "%m", tz="UTC")
@@ -41,9 +52,9 @@ ggarrange(mean, min, max, height, labels = c("A", "B", "C", "D"), ncol = 2, nrow
 
 
 
-#########################
-### sandeel vertical  ###
-#########################
+#=========================#
+#### sandeel vertical  ####
+#=========================#
 
 
 ggplot() + 
@@ -82,13 +93,13 @@ ggplot() +
 
 
 
-###########################
-### sandeel horizontal  ###
-###########################
+#===========================#
+#### sandeel horizontal  ####
+#===========================#
 
-#============================================#
-#   center of gravity (local distribution)   #
-#============================================#
+#==================================================#
+####   center of gravity (local distribution)   ####
+#==================================================#
 
 #== calculate center of gravity ==#
 setDT(data)[, center_of_gravity_Lat:= crossprod(Latitude,sA)/sum(sA), by=(coverage_name)][, center_of_gravity_Long:= crossprod(Longitude,sA)/sum(sA), by=(coverage_name)]
@@ -204,9 +215,9 @@ summary(lm(Latitude~month, data=data))
 
 
 
-#========================================================#
-#     NASC change by area (large scale distribution)     #
-#========================================================#
+#==============================================================#
+####     NASC change by area (large scale distribution)     ####
+#==============================================================#
 
 #== areas more than 1 coverage ==#
 data$No <- as.numeric(data$No)
@@ -224,9 +235,9 @@ ggplot()+theme_bw()+theme(axis.title.x=element_blank(),axis.text.x = element_tex
   labs(y="log(school NASC)")
 
 
-############################
-### time series analysis ###
-############################
+#============================#
+#### time series analysis ####
+#============================#
 
 
 #== coverage data ==#
@@ -293,9 +304,9 @@ ggplot() +
 
 
 
-######################
-###  Ping distance ###
-######################
+#======================#
+####  Ping distance ####
+#======================#
 library("rjson")
 #SD1032
 test <- fromJSON(file="S2019_SAILDRONE_1032/EXPORT/bottomEchogramPlot_T20190430_00595792-20190819_18193333.json")   

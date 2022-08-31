@@ -53,5 +53,8 @@ format(-3.076e-03, scientific = FALSE)
 a <- rpois(100, lambda=20) # 100 row, mean=20, poisson distribution
 
 
-#### have large plot ####
+#### plot window ####
+dev.new() #open a new plot window
+dev.off() #shut down the window
+#Error in plot.new() : figure margins too large
 xll() # to create a float window for a large plot

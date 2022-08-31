@@ -1,20 +1,24 @@
 library(dplyr)
 library(data.table)
 library(ggplot2)
+my_theme <- function() theme_bw() + theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
 
 #================================#
 ####         Load data        ####
 #================================#
-lapply(c("Data/sandeel.Rdata", "Data/School_EROS.Rdata", "Data/gps.Rdata"),load,.GlobalEnv)
+lapply(c("Data/sandeel.Rdata", "Data/School_EROS.Rdata"),load,.GlobalEnv)
 School_EROS.dt <- School.dt
 rm(School.dt)
+load("C:/Users/a37907/Desktop/Data/gps.Rdata")
+load("C:/Users/a37907/Desktop/Data/env.Rdata")
 
-#====  LDA results   ===#
+#====  LDA results   ===# (if needed)
 lapply(c("Data/score.Rdata", "Data/coef.Rdata", "Data/confusion.matrix.Rdata", "Data/slda.lst.Rdata"),load,.GlobalEnv)
-#large data
 load("C:/Users/a37907/Desktop/Data/slda.lst.Rdata")
-#
+#===================================#
 
+
+#====  combine SD and EROS  ====#
 data <- rbind(sandeel.dt, School_EROS.dt[Frequency%in%200 & category%in%"SAND" & !area %in% "outside" ]) #rbind(sandeel.dt, School_EROS.dt[Frequency%in%200 & category%in%"SAND" & !area %in% "outside" ]) #sandeel.dt #& school_area >= median(School_EROS.dt$school_area)
 data$month <- strftime(data$YMD_time, "%m", tz="UTC")
 data <- mutate (data, month_name = case_when (month=="04"~"April", month=="05"~"May", month=="06"~"June", month=="07"~"July~", TRUE ~"July~"))
@@ -22,14 +26,14 @@ data <- mutate (data, area_2 = case_when (area=="AlbjoernLing" ~ "AlbjoernLing",
 #data[, .(cnt= sum(.N)), by= c("vessel", "area")]
 #gps.dt[!coverage_name%in%c("F","x")][, .(cnt= sum(.N)), by= c("vessel", "coverage_name", "area")]
 
-#== coverage_name  ==#
+#== add coverage_name  ==# (need gps.dt)
 coverage.dt <- unique(data.table(vessel=gps.dt$vessel, area=gps.dt$area, Time_start=gps.dt$StartTime, Time_end=gps.dt$StopTime, coverage_name=gps.dt$coverage_name))
 coverage.dt <- coverage.dt[!coverage_name %in% c("F","x", "Transect")]
 ggplot()+geom_point(data=coverage.dt, aes(x=Time_start, y=coverage_name, col=vessel), size=2)+geom_point(data=coverage.dt, aes(x=Time_end, y=coverage_name, col=vessel), size=2) + facet_wrap(.~vessel, scales="free", ncol=1)
 #= find acoustic schools within trawl operation (position min~max) =#
 setDT(data)[setDT(coverage.dt), on =. (vessel==vessel, area==area, YMD_time>=Time_start, YMD_time<=Time_end), coverage_name := coverage_name]
 setDT(data)[, coverage_name := ifelse(is.na(coverage_name), "x", coverage_name )]
-#== coverage_name_2 ==#
+#== add coverage_name_2 ==#
 setDT(data)[,time_mean:=mean(YMD_time), by=(coverage_name)]
 tmp <- unique(data.table(coverage_name=data$coverage_name, time=data$time_mean, area=data$area))
 tmp <- tmp[order(area, time),][!coverage_name%in%"x"]
@@ -53,19 +57,25 @@ ggarrange(mean, min, max, height, labels = c("A", "B", "C", "D"), ncol = 2, nrow
 
 
 #=========================#
-#### sandeel vertical  ####
+####     vertical      ####
 #=========================#
-
-
-ggplot() + 
-  geom_point(data=sandeel.dt[school_area<100], aes(y=DepthfromBottom*-1, x=altitude_degree),col="black",shape=1, alpha=1) +
-  geom_point(data=sandeel.dt[school_area>=100], aes(y=DepthfromBottom*-1, x=altitude_degree),col="blue",shape=1, alpha=1) + 
-  #facet_wrap(~area) + 
-  labs(y="normalized deph")
-#abline(lm(weighted_meanDepth*-1~altitude_degree,data=sandeel.dt))
-#
-
 #== go to the logistic model ==#
+
+sandeel.dt |>
+  mutate(time = strftime(YMD_time, "%H:%M", tz="UTC")) |>
+  mutate(time = as.POSIXct(time, format = "%H:%M")) |>
+  ggplot() + my_theme() +
+  geom_point(aes(y = nor_Depth*-1, 
+                 x = time, # altitude_degree (if use altitude, comment out "scale_x_datetime()")
+                 colour = vessel),
+             shape = 1, alpha = 1) +
+  scale_x_datetime(date_labels="%H") +
+  facet_wrap(~strftime(YMD_time, "%m", tz="UTC")) + 
+  labs(y = "normalised depth", x = "time of day")
+
+
+
+
 
 
 
@@ -85,7 +95,7 @@ ggplot() +
 
 ggplot() +
   theme_bw(base_size=15) + theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), axis.title.x = element_blank(), axis.text.x = element_text(angle=90)) + 
-  geom_boxplot(data=data[!is.na(coverage_name_2)], aes(x=coverage_name_2, y=nor_Depth, fill=vessel)) + scale_y_reverse() + 
+  geom_boxplot(data = data[!is.na(coverage_name_2)], aes(x=coverage_name_2, y=nor_Depth, fill=vessel)) + scale_y_reverse() + 
   labs(y="Depth of school (m)")
 #
 
@@ -94,7 +104,7 @@ ggplot() +
 
 
 #===========================#
-#### sandeel horizontal  ####
+####      horizontal     ####
 #===========================#
 
 #==================================================#

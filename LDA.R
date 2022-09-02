@@ -1,3 +1,4 @@
+rm(list=ls())
 library(dplyr)
 library(data.table)
 library(ggplot2)
@@ -21,7 +22,9 @@ rm(School.dt)
 
 
 
-
+#=======================================#
+####      find Sandeel school        ####
+#=======================================#
 
 #== frequency response by category / area (use DT "joined") ==#
 data = School_EROS.dt[category %in% c("SAND", "OTHER")] # rbind(School_EROS.dt, School_SD.dt)
@@ -322,12 +325,16 @@ library(MASS)
 cols <- c("Date","Latitude", "Longitude", "PingNo", "pixelNo", "SampleCount", "vessel", "area", "YMD_time", "altitude", 
           "meanDepth", "DepthStart", "DepthStop","nor_DepthStart", "nor_DepthStop", "nor_Depth",  "altitude_degree")
 #,"SE","sV_stdv","school_length","school_height", "DepthStart", "DepthStop", "meanDepth" ,"sA", "altitude_degree", "Perimeter", "DepthfromBottom","Elongation", "school_rect", "school_circ"
-data <- subset(School_EROS.dt, Frequency %in% c(200)& !category %in% "PSAND"& school_area >= median(School_EROS.dt$school_area) )#& !category %in% "PSAND" & school_area >= median(School_EROS.dt$school_area)
+data <- subset(School_EROS.dt, Frequency %in% c(200) 
+               & !category %in% "PSAND"
+               # & school_area >= median(School_EROS.dt$school_area)
+               )
 data[,cols]=NULL
-#data[, rf_18 := rf[Frequency==18], by=id]
-#data <- subset(data, Frequency %in% c(200))
 data[, Frequency:=NULL]
-data[,sV_mean:=log(sV_mean)][,rf:=log(rf)][,school_area:=log(school_area)][,Elongation:=log(Elongation)][,school_rect:=log(school_rect)][,school_circ:=log(school_circ)][,sV_stdv:=log(sV_stdv)][,SE:=log(SE)][,sA:=log(sA)][,school_length:=log(school_length)][,Perimeter:=log(Perimeter)][,DepthfromBottom:=log(DepthfromBottom+1.7)][,school_height:=log(school_height)][,rf_18:=log(rf_18)]
+data[,sV_mean:=log(sV_mean)][,rf:=log(rf)][,school_area:=log(school_area)][,Elongation:=log(Elongation)][,school_rect:=log(school_rect)][,school_circ:=log(school_circ)][,sV_stdv:=log(sV_stdv)][,SE:=log(SE)][,sA:=log(sA)][,school_length:=log(school_length)][,Perimeter:=log(Perimeter)][,DepthfromBottom:=log(DepthfromBottom+1.7)][,school_height:=log(school_height)]
+
+
+#== plot (*take long time) ==#
 #library("psych")
 #pairs.panels(data[, -c("id","category")],bg=c("pink","blue", "green")[as.factor(data$category)], pch=21, gap=0)
 
@@ -407,8 +414,6 @@ save(confusion.matrix, file="confusion.matrix.Rdata")
 save(slda.lst, file="slda.lst.Rdata")
 #
 
-lapply(c("score.Rdata", "coef.Rdata", "confusion.matrix.Rdata", "slda.lst.Rdata"),load,.GlobalEnv)
-
 
 #== determine ids "SAND" ==#
 ids <- score.df
@@ -449,17 +454,21 @@ ggplot(bio_id) + theme_bw(base_size=15) + theme(panel.grid.minor = element_blank
   geom_histogram(aes(x=meanLength, y = stat(density), fill=pred), bins=30, colour="grey50", alpha=0.5, position="dodge") +
   geom_density(aes(x=meanLength, fill=pred), colour="grey50", alpha=0.5) +
   labs(x="mean body length of a trawl catch (cm)", y="Density")
-#
-nrow(bio_id[pred=='Correct'])/nrow(bio_id) #correct rate
+nrow(bio_id[pred=='Correct'])/nrow(bio_id)
+
+#==  stat: mean length correctly vs incorrectly classified   ==#
 summary(lm(meanLength~pred, data=bio_id))
 #
 
-
+#==  calculate accuracy ==# (schools larger than 500m2)
 eros.lda <- data.table(id=train.data$id, pred=predict(slda.lst[[1]], train.data))
 eros.lda <- merge(x = School_EROS.dt, y = eros.lda, by = "id", all.x = TRUE)
 eros.lda <- eros.lda[Frequency %in% 200 & !category%in%"PSAND" & !pred%in%NA]
 eros.lda <- eros.lda[, c("id", "category","pred","YMD_time", "PingNo","school_area", "DepthStart", "DepthStop", "meanDepth", "area")]
 nrow(eros.lda[category == pred & school_area >=500])/nrow(eros.lda[school_area >=500])
+
+
+
 
 
 #== step-wise Discriminant analyses 1 time ==#
@@ -487,9 +496,78 @@ plot(performance(pred, "tpr", "fpr"), colorize=TRUE)#tpr:true prediction rate, f
 
 
 
+#==========================================#
+#===         find Sandeel school        ===#
+#### Discriminant analyses (with 18kHz) ####
+#==========================================#
+
+#== pre-processing ==#
+data <- subset(School_EROS.dt, Frequency %in% c(200, 18) 
+               & !category %in% "PSAND"
+               # & school_area >= median(School_EROS.dt$school_area)
+)
+data[, rf_18 := rf[Frequency==18], by=id]
+data <- subset(data, Frequency %in% c(200))
+data[,cols]=NULL
+data[, Frequency:=NULL]
+data[,sV_mean:=log(sV_mean)][,rf:=log(rf)][,school_area:=log(school_area)][,Elongation:=log(Elongation)][,school_rect:=log(school_rect)][,school_circ:=log(school_circ)][,sV_stdv:=log(sV_stdv)][,SE:=log(SE)][,sA:=log(sA)][,school_length:=log(school_length)][,Perimeter:=log(Perimeter)][,DepthfromBottom:=log(DepthfromBottom+1.7)][,school_height:=log(school_height)]
+data[,rf_18:=log(rf_18)]
+
+#== Split the data into training and test set ==#
+training.samples <- createDataPartition(data$category, p = 0.8, list = FALSE) #80% : training data, 20% : test data
+train.data <- data[training.samples, ]
+test.data <- data[-training.samples, ]
+
+#== Normalize the data. variance=1, mean=varied. Categorical variables are automatically ignored.
+preproc.param <- preProcess(train.data[,-c("id")], method = c("center", "scale"))
+data <- predict(preproc.param, data)
+train.data <- predict(preproc.param, train.data)
+test.data <- predict(preproc.param, test.data)
+train.data$category <- as.factor(train.data$category)
+test.data$category <- as.factor(test.data$category)
+ggplot(melt(data[,-c("id")]), aes(value)) + geom_histogram(bins=30) + facet_wrap(~variable, scales="free_x")
+featurePlot(train.data[, 3:ncol(train.data)],as.factor(train.data$category), plot="density", auto.key = list(columns = 2))
 
 
+#== step-wise Discriminant analyses 1 time ==#
+maxvar <-(ncol(train.data))-2
+direction <-"backward"
+slda1 <- train(category ~ ., data = train.data[, -c("id")],
+               method = "stepLDA", importance = TRUE,metric="ROC", tuneLength=10,
+               trControl = trainControl(method = "repeatedcv",number=10, repeats = 3, savePredictions = "final", classProbs = TRUE), #"repeatedcv" / "cv"
+               tuneGrid=data.frame(maxvar,direction),
+)
+slda1$finalModel
+varImp(slda1)
+slda1
+slda1$finalModel$fit
+coef <- data.table(slda1$finalModel$fit$scaling, keep.rownames = TRUE)
+predictions.test <- predict(slda1, test.data) #, type="prob"
+mean(predictions.test==test.data$category)
+confusion.matrix <- confusionMatrix(reference=as.factor(test.data$category) , 
+                                    data= predictions.test, 
+                                    mode = "everything", 
+                                    positive = "SAND")
+score <- data.frame(id = test.data$id, score = NA, pred = predict(slda1, test.data))
+for(j in 1:nrow(slda1$finalModel$fit$scaling)) {
+  for(i in 1:nrow(test.data)) {
+    temp <- slda1$finalModel$fit$scaling[j] * test.data[[i, row.names(slda1$finalModel$fit$scaling)[j]]]
+    score[i, 2] <- as.numeric(temp)
+  }
+}
 
+save(coef, file="Data/LDAresults_with18kHz/coef.Rdata")
+save(slda1, file="Data/LDAresults_with18kHz/slda1.Rdata")
+save(confusion.matrix, file="Data/LDAresults_with18kHz/confusion.matrix.Rdata")
+save(score, file="Data/LDAresults_with18kHz/score.Rdata")
+
+library(ROCR)
+predictions.test <- predict(slda1, test.data, type="prob")
+pred <- prediction(predictions.test[2], test.data$category)
+plot(performance(pred, "tpr", "fpr"), colorize=TRUE) #tpr:true prediction rate, fpr:false prediction rate
+
+
+#===========================#
 
 
 

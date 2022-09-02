@@ -393,8 +393,8 @@ for(i in 1:10) {
   #temp3 <- confusionMatrix(reference=as.factor(test.data$category) , data= predictions, mode = "everything", positive = "SAND")
   #confusion.matrix[[paste0(i,"test")]] <- temp3
   slda.lst[[i]] <- slda
-  predictions <- predict(slda, train.data, type="prob")
-  pred <- prediction(predictions[2], train.data$category)
+  predictions <- predict(slda, test_SD.data, type="prob")
+  pred <- prediction(predictions[2], test_SD.data$category)
   png(paste0("ROC",i,".png") , width = 800, height = 600)
   plot(performance(pred, "tpr", "fpr"), colorize=TRUE)#tpr:true prediction rate, fpr:false prediction rate
   dev.off()

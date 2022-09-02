@@ -366,6 +366,7 @@ test_SD.data <- predict(preproc.param, test_SD.data)
 
 #== step-wise LDA * 10,  Saildrone data ==#
 library(ROCR)
+library(klaR)
 maxvar <-(ncol(train.data))-2
 direction <-"backward"
 test_SD.data <- data.frame(test_SD.data)
@@ -395,7 +396,12 @@ for(i in 1:10) {
   slda.lst[[i]] <- slda
   predictions <- predict(slda, test_SD.data, type="prob")
   pred <- prediction(predictions[2], test_SD.data$category)
-  png(paste0("ROC",i,".png") , width = 800, height = 600)
+  png(paste0("ROC",i,"_test.png") , width = 800, height = 600)
+  plot(performance(pred, "tpr", "fpr"), colorize=TRUE)#tpr:true prediction rate, fpr:false prediction rate
+  dev.off()
+  predictions <- predict(slda, train.data, type="prob")
+  pred <- prediction(predictions[2], train.data$category)
+  png(paste0("ROC",i,"_train.png") , width = 800, height = 600)
   plot(performance(pred, "tpr", "fpr"), colorize=TRUE)#tpr:true prediction rate, fpr:false prediction rate
   dev.off()
   for(j in 1:nrow(slda$finalModel$fit$scaling)) {

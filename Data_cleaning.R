@@ -25,7 +25,7 @@ setwd("E:/KnowSandeel15781/Data")
 
 #== route of vessels ==#
 library("rjson")
-EROS.df <- fromJSON(file="S2019847_PEROS_3317/EXPORT/EchogramPlot_T20190423_16561743-20190512_19512565.json") #EROS
+EROS.df <- fromJSON(file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019847_PEROS_3317/EXPORT/EchogramPlot_T20190423_16561743-20190512_19512565.json") #EROS
 EROS.df <- data.table(PingNumber = EROS.df$pingNumber,  time=EROS.df$time,  Latitude = as.numeric(EROS.df$latitude), Longitude = as.numeric(EROS.df$longitude))
 EROS.df$time <- as.POSIXct(EROS.df$time, origin = "1970-01-01", tz = "UTC")
 library(lubridate)
@@ -34,15 +34,16 @@ EROS.df <- EROS.df[, lapply(.SD, mean), .(time = round_date(time, "10 seconds"))
 EROS.df$month <- strftime(EROS.df$time, "%m", tz="UTC")
 EROS.df$YMD_time <- EROS.df$time
 
-sd1032.df <- read.csv("CRUISE_LOG/sd-1032_GPS_20190424_20190820.csv" , header = TRUE, sep=",", dec=".")
+sd1032.df <- read.csv("C:/Users/a37907/Desktop/KnowSandeel15781/Data/CRUISE_LOG/sd-1032_GPS_20190424_20190820.csv" , header = TRUE, sep=",", dec=".")
 sd1032.df$id <- 1
 sd1032.df$area <- "area"
 sd1032.df$YMD_time <- strptime(paste(sd1032.df$GPS_date, sd1032.df$GPS_time, sep=" "), "%Y-%m-%d %H:%M:%S", tz= "UTC") 
 sd1032.df <- subset(sd1032.df, sd1032.df$Latitude!="na")
+sd1032.df$month <- strftime(sd1032.df$YMD_time, "%m", tz="UTC")
 
-gps <- read.csv("CRUISE_LOG/sd-1031_GPS_20190424_20190505.csv" , header = TRUE, sep=",", dec=".")
-gps1 <- read.csv("CRUISE_LOG/sd-1031_GPS_20190510_20190626.csv" , header = TRUE, sep=",", dec=".")
-gps2 <- read.csv("CRUISE_LOG/sd-1031_GPS_20190628_20190820.csv" , header = TRUE, sep=",", dec=".")
+gps <- read.csv("C:/Users/a37907/Desktop/KnowSandeel15781/Data/CRUISE_LOG/sd-1031_GPS_20190424_20190505.csv" , header = TRUE, sep=",", dec=".")
+gps1 <- read.csv("C:/Users/a37907/Desktop/KnowSandeel15781/Data/CRUISE_LOG/sd-1031_GPS_20190510_20190626.csv" , header = TRUE, sep=",", dec=".")
+gps2 <- read.csv("C:/Users/a37907/Desktop/KnowSandeel15781/Data/CRUISE_LOG/sd-1031_GPS_20190628_20190820.csv" , header = TRUE, sep=",", dec=".")
 sd1031.df <- rbind (gps, gps1, gps2)
 rm(gps,gps1,gps2)
 sd1031.df$id <- 1
@@ -52,12 +53,13 @@ sd1031.df <- subset(sd1031.df, sd1031.df$Latitude!="na")
 sd1031.df$month <- strftime(sd1031.df$YMD_time, "%m", tz="UTC")
 
 library("sf")
+load("Data/spdf.Rdata")
 test <- spdf %>% split(spdf$id) %>% 
   lapply(function(x) rbind(x,x[1,])) %>%
   lapply(function(x) x[,1:2]) %>%
   lapply(function(x) list(as.matrix(x))) %>%
   lapply(function(x) st_polygon(x))
-points <- st_as_sf(EROS.df,coords=c('Longitude','Latitude'),remove = F)
+points <- st_as_sf(EROS.df, coords=c('Longitude','Latitude'), remove = F)
 polys <- test %>% st_sfc() %>% st_sf(geom=.) %>% mutate(id=factor(1:13)) 
 temp <- polys  %>% st_intersection(points) 
 temp <- mutate (temp, area = case_when (id=="1" ~ "AlbjoernLing", id=="2" ~ "VestbankenSouthEast",
@@ -68,9 +70,9 @@ temp <- mutate (temp, area = case_when (id=="1" ~ "AlbjoernLing", id=="2" ~ "Ves
                                         id=="11" ~ "Nordgyden", id=="12" ~ "Ostbanken",
                                         TRUE ~ "Outer_Shoal"))
 
-temp <- data.table(id=temp$YMD_time, area=temp$area)
-temp <- temp[!duplicated(temp[,c('id')]),] # the first area will be remain for data which are on a border of 2 areas 
-temp2 <- data.table(id=EROS.df$YMD_time)
+temp <- data.table(id = temp$YMD_time, area=temp$area)
+temp <- temp[!duplicated(temp[,c('id')]),] # the first area will remain for data which are on a border of 2 areas 
+temp2 <- data.table(id = EROS.df$YMD_time)
 t <- merge(x = temp2, y = temp, by = "id", all.x = TRUE)
 t$area[is.na(t$area)] = "outside"
 EROS.df$area <- t$area
@@ -82,6 +84,8 @@ E <- data.table(id=EROS.df$PingNumber, Latitude=EROS.df$Latitude, Longitude=EROS
 S1 <- data.table(id=sd1031.df$id, Latitude=sd1031.df$Latitude, Longitude=sd1031.df$Longitude, YMD_time=as.POSIXct(sd1031.df$YMD_time), area=sd1031.df$area, month=sd1031.df$month, vessel="SD1031")
 S2 <- data.table(id=sd1032.df$id, Latitude=sd1032.df$Latitude, Longitude=sd1032.df$Longitude, YMD_time=as.POSIXct(sd1032.df$YMD_time), area=sd1032.df$area, month=sd1032.df$month, vessel="SD1032")
 gps.dt <- rbind(E, S1, S2)
+rm(EROS.df, sd1031.df, sd1032.df, E, S1, S2)
+
 
 #== coverage ==#
 gps.dt <- gps.dt[order(vessel, area, YMD_time),]
@@ -90,33 +94,52 @@ setDT(gps.dt)[, coverage:=as.numeric(1)]
 gps.dt$coverage <- as.numeric(gps.dt$coverage)
 
 
-## run by vessel (= run 3 times)
-x <- gps.dt[vessel%in%"SD1032" & !area%in%"outside"] #gps.dt[vessel%in%"SD1031"]/gps.dt[vessel%in%"SD1032"]
-tmp <- x
+#== run by vessel ==#
+v = as.character("EROS") # "SD1031" / "SD1032" / "EROS"
+tmp <- gps.dt[vessel%in%v] 
+tmp <- data.frame(tmp)
 
 for (i in 2:nrow(tmp)){
-  if (tmp$time_diff[i]>=24)
+  if (tmp[i,]$time_diff >= 24)                                        #if time_diff is over 24 hours
+    tmp[i,]$coverage <- tmp[(i-1),]$coverage + 1                      #coverage number + 1
+  else if (tmp[i,]$area != tmp[(i-1),]$area &&                        #if time_diff is less than 24h and area[i] is not equal to area[i-1],
+           nrow(filter(tmp[i:(i+49),], area == tmp[i,]$area))>=40 &&  # and if area[i] continues more than 40 in the next 50 rows
+           tmp[i,]$area != tmp[tmp$coverage == tmp$coverage[i-1],]$area[1])   # and if area[i] is not equal to
+    tmp[i,]$coverage <- tmp[(i-1),]$coverage + 1                      #coverage number + 1
+  else
+    tmp[i,]$coverage <- tmp[(i-1),]$coverage                          #if not, coverage number[i] = coverage number [i-1]
+}
+
+#==============================================================#
+for (i in 2:nrow(tmp)){
+  if (tmp$time_diff[i] >= 24)
     tmp$coverage[i] <- tmp$coverage[(i-1)] + 1
-  else if (tmp$area[i]!=tmp$area[(i-1)] && 
-           nrow(filter(tmp[i:(i+49)], area==tmp$area[i]))>=40 && 
-           tmp$area[i]!= tmp[coverage==coverage[i-1]]$area[1])
+  else if (tmp$area[i] != tmp$area[(i-1)] && 
+           nrow(filter(tmp[i:(i+49)], area == tmp$area[i]))>=40 && 
+           tmp$area[i]!= tmp[coverage == coverage[i-1]]$area[1])
     tmp$coverage[i] <- tmp$coverage[(i-1)] + 1
   else
     tmp$coverage[i] <- tmp$coverage[(i-1)]
 }
+#==============================================================#
 
+tmp <- data.table(tmp)
 tmp[, .(cnt= sum(.N)), by= c("coverage", "area")]
 ggplot() +theme_bw(base_size=15) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.title.x = element_blank(),axis.title.y = element_blank(), axis.text = element_text(size=5,), axis.ticks.length  = unit(1, "mm"), strip.text = element_text(size = 7))+
   geom_path(data = tmp, aes(Longitude, Latitude, colour=as.factor(coverage)))+ scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + facet_wrap(~coverage, scales="free")
-outside <- gps.dt[vessel%in%"SD1032" & area%in%"outside"] #"SD1031", "SD1032"
+
+outside <- gps.dt[vessel%in%v & area%in%"outside"]
 outside$coverage<- as.character(outside$coverage)
 outside$coverage<- "F"
-s2 <- data.table(rbind(tmp, outside)) #change data.table name depending on vessel "E":EROS, "s1":SD1031, "s2":SD1032
+
+tmp <- data.table(rbind(tmp, outside)) #change data.table name depending on vessel "E":EROS, "s1":SD1031, "s2":SD1032
+assign(paste("tmp", v, sep = "_"), tmp)
+
 
 ## combine 3 data.table
-gps.dt <- data.table(rbind(E, s1, s2))
+gps.dt <- data.table(rbind(EROS, SD1031, SD1032))
 setDT(gps.dt)[, time_diff:=NULL]
-rm(E, s1, s2, tmp, outside, x)
+rm(EROS, SD1031, SD1032, tmp, outside, x)
 
 #== add distance column ==#
 library(geosphere)
@@ -147,11 +170,10 @@ ggplot() + theme_bw() + theme(panel.grid = element_blank(), axis.title = element
   facet_wrap(~coverage_name, scales="free")
 gps.dt[, .(cnt= sum(.N)), by= c("vessel", "coverage_name")]
 
-save(EROS.df, file="EROS.Rdata")
-save(sd1031.df, file="sd1031.Rdata")
-save(sd1032.df, file="sd1032.Rdata")
+#save(EROS.df, file="EROS.Rdata")
+#save(sd1031.df, file="sd1031.Rdata")
+#save(sd1032.df, file="sd1032.Rdata")
 save(gps.dt, file="gps.Rdata")
-lapply(c("EROS.Rdata", "sd1031.Rdata", "sd1032.Rdata"),load,.GlobalEnv)
 
 
 #==========================================================================================================================================#
@@ -483,9 +505,9 @@ rm(SvSchool_1031_KORONA.dt, SvSchool_1031_manual.dt, SvSchool_1031_noise.dt)
 Sv.dt <- SvSchool_1031.dt
 #== input data.table ==#
 library("rjson")
-#bottom.json <- fromJSON(file="S2019847_PEROS_3317/EXPORT/bottomEchogramPlot_T20190423_16561743-20190512_19512565.json") #EROS
-#bottom.json <- fromJSON(file="S2019_SAILDRONE_1032/EXPORT/bottomEchogramPlot_T20190430_00595792-20190819_18193333.json") #SD1032  
-bottom.json <- fromJSON(file="S2019_SAILDRONE_1031/EXPORT/bottomEchogramPlot_T20190424_10291908-20190820_12575243.json")  #SD1031
+#bottom.json <- fromJSON(file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019847_PEROS_3317/EXPORT/bottomEchogramPlot_T20190423_16561743-20190512_19512565.json") #EROS
+#bottom.json <- fromJSON(file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019_SAILDRONE_1032/EXPORT/bottomEchogramPlot_T20190430_00595792-20190819_18193333.json") #SD1032  
+bottom.json <- fromJSON(file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019_SAILDRONE_1031/EXPORT/bottomEchogramPlot_T20190424_10291908-20190820_12575243.json")  #SD1031
 
 
 #== calculate depth_bin of pixel ==#
@@ -772,14 +794,26 @@ ggplot(data=subset(School_EROS_bio.df, Frequency %in% 200), aes(x=LengthCentimet
 
 
 
+#=============================#
+####  bottom depth data    ####
+#=============================#
+library("rjson")
+#bottom.json <- fromJSON(file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019847_PEROS_3317/EXPORT/bottomEchogramPlot_T20190423_16561743-20190512_19512565.json") #EROS
+#bottom.json <- fromJSON(file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019_SAILDRONE_1032/EXPORT/bottomEchogramPlot_T20190430_00595792-20190819_18193333.json") #SD1032  
+bottom.json <- fromJSON(file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019_SAILDRONE_1031/EXPORT/bottomEchogramPlot_T20190424_10291908-20190820_12575243.json")  #SD1031
 
+#== Repeat 3 times for each vessel ==#
+bottom.dt <- data.table(PingNumber = bottom.json$pingNumber, 
+                        BottomDepth = as.numeric(bottom.json$lowerLayerBoundary), 
+                        PingDistance = as.numeric(bottom.json$vesselDistance), 
+                        time = as.numeric(bottom.json$time))
+setDT(bottom.dt)[, Diff:=c(0, diff(bottom.dt$PingDistance))][, distance:= Diff*1852][,Diff:=NULL][,PingDistance:=NULL]
+bottom.dt$vessel <- as.character("SD1031") # "EROS" / "SD1031" / "SD1032" 
+bottom_EROS <- bottom.dt # "bottom_EROS" / "bottom_SD1031" / "bottom_SD1032"
+#====================================#
 
-
-
-
-
-
-
+bottom.dt <- rbind(bottom_EROS, bottom_SD1031, bottom_SD1032)
+save(bottom.dt, file="C:/Users/a37907/Desktop/bottom.Rdata")
 
 
 

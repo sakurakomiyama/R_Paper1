@@ -15,7 +15,7 @@ my_theme <- function() theme_bw(base_size=15) + theme(panel.grid.minor = element
 
 
 #====   school, trawl, bio data   ====#
-lapply(c("Data/sandeel.Rdata", "Data/School_EROS_bio.df", "Data/spdf.Rdata", "Data/School_SD.Rdata"),load,.GlobalEnv)
+lapply(c("Data/School_EROS_bio.df", "Data/spdf.Rdata", "Data/School_SD.Rdata"),load,.GlobalEnv)
 
 load("Data/School_EROS.Rdata")
 School_EROS.dt <- School.dt
@@ -31,22 +31,37 @@ rm(School.dt)
 #### Discriminant analyses (LDA/DFA) ####
 #=======================================#
 
+# add bottom depth
+School_EROS.dt$bottom_Depth <- School_EROS.dt$weighted_meanDepth / School_EROS.dt$nor_Depth
+School_SD.dt$bottom_Depth <- School_SD.dt$weighted_meanDepth / School_SD.dt$nor_Depth
 
 #library("tidyverse")
 library("caret")
 #library(MASS)
 #== pre-processing ==#
-cols <- c("Date","Latitude", "Longitude", "PingNo", "pixelNo", "SampleCount", "vessel", "area", "YMD_time", "altitude", 
-          "meanDepth", "DepthStart", "DepthStop","nor_DepthStart", "nor_DepthStop", "nor_Depth",  "altitude_degree")
-#,"SE","sV_stdv","school_length","school_height", "DepthStart", "DepthStop", "meanDepth" ,"sA", "altitude_degree", "Perimeter", "DepthfromBottom","Elongation", "school_rect", "school_circ"
+cols <- c("Date","Latitude", "Longitude", "PingNo", "pixelNo", 
+          "SampleCount", "vessel", "area", "YMD_time", "altitude", 
+          "meanDepth", "DepthStart", "DepthStop", "sV_var", "nor_DepthStart", 
+          "nor_DepthStop", "nor_Depth",  "altitude_degree")
+
 data <- subset(School_EROS.dt, Frequency %in% c(200) 
                & !category %in% "PSAND"
                # & school_area >= median(School_EROS.dt$school_area)
                )
 data[,cols]=NULL
 data[, Frequency:=NULL]
-data[,sV_mean:=log(sV_mean)][,rf:=log(rf)][,school_area:=log(school_area)][,Elongation:=log(Elongation)][,school_rect:=log(school_rect)][,school_circ:=log(school_circ)][,sV_stdv:=log(sV_stdv)][,SE:=log(SE)][,sA:=log(sA)][,school_length:=log(school_length)][,Perimeter:=log(Perimeter)][,DepthfromBottom:=log(DepthfromBottom+1.7)][,school_height:=log(school_height)]
-
+# remove negative value of depth from bottom
+for (i in 1:nrow(data)) {
+  if (data$DepthfromBottom[i] < 0)
+    data$DepthfromBottom[i] <- 0
+  else
+    data$DepthfromBottom[i] <- data$DepthfromBottom[i]
+}
+# log transform #
+data[,sV_mean:=log(sV_mean)][,sV_max:=log(sV_max)][,sV_min:=log(sV_min)][,sV_stdv:=log(sV_stdv)]
+data[,rf:=log(rf)][,SE:=log(SE)][,sA:=log(sA)][,school_area:=log(school_area)][,school_length:=log(school_length)]
+data[,Perimeter:=log(Perimeter)][,DepthfromBottom:=log(DepthfromBottom+1)][,school_height:=log(school_height)]
+data[,Elongation:=log(Elongation)][,school_rect:=log(school_rect)][,school_circ:=log(school_circ)]
 
 #== plot (*take long time) ==#
 #library("psych")
@@ -65,14 +80,26 @@ data[,sV_mean:=log(sV_mean)][,rf:=log(rf)][,school_area:=log(school_area)][,Elon
 #train.data$category <- as.factor(train.data$category)
 #test.data$category <- as.factor(test.data$category)
 ggplot(melt(data[,-c("id")]), aes(value))+geom_histogram(bins=30)+facet_wrap(~variable, scales="free_x")
-featurePlot(train.data[, 3:ncol(train.data)],as.factor(train.data$category), plot="density", auto.key = list(columns = 2))
+featurePlot(data[, 3:ncol(data)],as.factor(data$category), plot="density", auto.key = list(columns = 2))
 
 
 #== saildrone data ==#
 test_SD.data <- subset(School_SD.dt, Frequency %in% 200 & category %in% c("KORONA", "manual") & !area %in% "outside")
 test_SD.data[,cols]=NULL
 test_SD.data[, Frequency:=NULL]
-test_SD.data[,sV_mean:=log(sV_mean)][,rf:=log(rf)][,school_area:=log(school_area)][,Elongation:=log(Elongation)][,school_rect:=log(school_rect)][,school_circ:=log(school_circ)][,sV_stdv:=log(sV_stdv)][,SE:=log(SE)][,sA:=log(sA)][,school_length:=log(school_length)][,Perimeter:=log(Perimeter)][,DepthfromBottom:=log(DepthfromBottom+2)][,school_height:=log(school_height)]
+# remove negative value of depth from bottom
+for (i in 1:nrow(test_SD.data)) {
+  if (test_SD.data$DepthfromBottom[i] < 0)
+    test_SD.data$DepthfromBottom[i] <- 0
+  else
+    test_SD.data$DepthfromBottom[i] <- data$DepthfromBottom[i]
+}
+# log transformation #
+test_SD.data[,sV_mean:=log(sV_mean)][,rf:=log(rf)][,school_area:=log(school_area)][,Elongation:=log(Elongation)]
+test_SD.data[,school_rect:=log(school_rect)][,school_circ:=log(school_circ)][,sV_stdv:=log(sV_stdv)]
+test_SD.data[,SE:=log(SE)][,sA:=log(sA)][,school_length:=log(school_length)][,Perimeter:=log(Perimeter)]
+test_SD.data[,DepthfromBottom:=log(DepthfromBottom+1)][,school_height:=log(school_height)]
+
 # Normarize
 preproc.param <- preProcess(test_SD.data[,-c("id")], method = c("center", "scale"))
 test_SD.data <- predict(preproc.param, test_SD.data)
@@ -154,7 +181,7 @@ for(i in 1:10) {
   data.lst[[paste0(i,"test")]] <- test.data
 }
 
-rm(temp, temp2, temp3, temp4, temp5, training.samples)
+rm(temp, temp2, temp3, temp4, temp5, training.samples, preproc.param)
 save(score.df, file="score.Rdata")
 save(coef.df, file="coef.Rdata")
 save(confusion.matrix, file="confusion.matrix.Rdata")
@@ -199,7 +226,7 @@ lift_df %>%
   #            fill = "red", alpha = .3) + 
   geom_line(colour = "red", lwd = 1.0) + 
   labs(x = "False positive", y = "True positive")
-dev.off()
++++dev.off()
 #==========================#
 
 
@@ -208,11 +235,12 @@ dev.off()
 #== determine ids "SAND" ==#
 ids <- score.df
 ids$pred <- ifelse(score.df$pred=="SAND", 1, 0)
-ids <- with(ids, aggregate(ids[,c("score", "pred")], list(id), mean))
+ids <- with(ids, aggregate(ids[,c("score", "pred")], list(id), mean)) # sandeel 10 times -> mean 1, other 10 times -> mean 0
 ids <- data.table(ids)
-ids <- ids[pred%in%1]$Group.1
+ids <- ids[pred %in% 1]$Group.1 # extract ids only the mean = 1 (sandeel 10 times)
 sandeel.dt <-  subset(School_SD.dt, id %in% ids & Frequency %in% 200)
 colnames(sandeel.dt) <- make.unique(names(sandeel.dt)) #for ggplot error
+
 test_SD.data$predict <- predict(slda.lst[[10]], test_SD.data)
 featurePlot(test_SD.data[, 3:(ncol(test_SD.data)-1)],as.factor(test_SD.data$predict), plot="density", auto.key = list(columns = 2))
 

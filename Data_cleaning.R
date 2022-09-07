@@ -13,7 +13,7 @@ library(data.table)
 library(ggplot2)
 
 #setwd("C:/Users/a37907/Desktop/KnowSandeel15781/Data")
-setwd("E:/KnowSandeel15781/Data")
+#setwd("E:/KnowSandeel15781/Data")
 #setwd("C:/Users/komiy/Desktop/KnowSandeel15781/Data")
 
 #==========================================================================================================================================#
@@ -283,7 +283,7 @@ SvSchool.dt <- data.table()
 pattern <- "SvSchool\\s*(.*?)\\s*_T2019"
 
 #== Read file name and directory of text data
-files <- list.files('S2019847_PEROS_3317/EXPORT/Sv_SAND_2.11.0-rc1',pattern='txt$', full.names=TRUE)
+files <- list.files('C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019847_PEROS_3317/EXPORT/Sv_SAND_2.11.0-rc1',pattern='txt$', full.names=TRUE)
 #files <- list.files('S2019847_PEROS_3317/EXPORT/test', pattern='txt$', full.names=TRUE)
 
 #== read SAND data file(i) ==#
@@ -331,8 +331,13 @@ SvSchool_OTHER.dt <- SvSchool_OTHER.dt[!is.na(SvSchool_OTHER.dt$value), ]
 save(SvSchool_OTHER.dt, file = "Svschool_OTHER.Rdata")
 rm(files, i, pattern, temp)
 
-#== Read raw data of 3 categories ==#
-lapply(c("Svschool_SAND.Rdata", "Svschool_PSAND.Rdata", "Svschool_OTHER.Rdata"),load,.GlobalEnv)
+#ここから
+#============================================#
+#### Read raw data of 3 categories (EROS) ####
+#============================================#
+lapply(c("C:/Users/a37907/Desktop/KnowSandeel15781/Data/Svschool_SAND.Rdata", 
+         "C:/Users/a37907/Desktop/KnowSandeel15781/Data/Svschool_PSAND.Rdata", 
+         "C:/Users/a37907/Desktop/KnowSandeel15781/Data/Svschool_OTHER.Rdata"),load,.GlobalEnv)
 SvSchool.dt <- rbind(SvSchool.dt, SvSchool_PSAND.dt, SvSchool_OTHER.dt)
 setnames(SvSchool.dt, c("variable", "value"), c("SampleNo","Sv"))
 rm(SvSchool_PSAND.dt, SvSchool_OTHER.dt)
@@ -353,7 +358,7 @@ rm(SvSchool_PSAND.dt, SvSchool_OTHER.dt)
 #== read KORONA data file(i) ==#
 SvSchool.dt <- data.table()
 pattern <- "SvSchool\\s*(.*?)\\s*_T2019"
-files <- list.files('S2019_SAILDRONE_1032/EXPORT/PSAND_20211026',pattern='txt$', full.names=TRUE)
+files <- list.files('C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019_SAILDRONE_1032/EXPORT/PSAND_20211026',pattern='txt$', full.names=TRUE)
 for(i in 1:length(files)) {
   temp <- as.data.table(read.table(header = TRUE, files[i], sep = ","))     ## read text data
   temp <- cbind(category = "KORONA", temp)                                    ## add column "category" and put "SAND"
@@ -397,9 +402,13 @@ for(i in 1:length(files)) {
 save(SvSchool_noise.dt, file = "SvSchool_noise.Rdata")
 
 
-
-lapply(c("Svschool_KORONA.Rdata", "Svschool_manual.Rdata", "SvSchool_noise.Rdata"),load,.GlobalEnv)
-
+#ここから
+#==============================================#
+#### Read raw data of 3 categories (SD1032) ####
+#==============================================#
+lapply(c("C:/Users/a37907/Desktop/KnowSandeel15781/Data/Svschool_KORONA.Rdata", 
+         "C:/Users/a37907/Desktop/KnowSandeel15781/Data/Svschool_manual.Rdata", 
+         "C:/Users/a37907/Desktop/KnowSandeel15781/Data/SvSchool_noise.Rdata"),load,.GlobalEnv)
 
 SvSchool_1032.dt <- rbind(SvSchool.dt, SvSchool_manual.dt, SvSchool_noise.dt)
 SvSchool_1032.dt <- SvSchool_1032.dt[!is.na(SvSchool_1032.dt$value), ]
@@ -426,7 +435,7 @@ rm(SvSchool.dt, SvSchool_manual.dt, SvSchool_noise.dt)
 #== read KORONA data file(i) ==#
 SvSchool_1031_KORONA.dt <- data.table()
 pattern <- "SvSchool\\s*(.*?)\\s*_T2019"
-files <- list.files('S2019_SAILDRONE_1031/EXPORT/PSAND_20211114',pattern='txt$', full.names=TRUE)
+files <- list.files('C:/Users/a37907/Desktop/KnowSandeel15781/Data/S2019_SAILDRONE_1031/EXPORT/PSAND_20211114',pattern='txt$', full.names=TRUE)
 for(i in 1:length(files)) {
   temp <- as.data.table(read.table(header = TRUE, files[i], sep = ","))     ## read text data
   temp <- cbind(category = "KORONA", temp)                                    ## add column "category" and put "SAND"
@@ -470,9 +479,13 @@ for(i in 1:length(files)) {
 save(SvSchool_1031_noise.dt, file = "SvSchool_1031_noise.Rdata")
 
 
-
-lapply(c("SvSchool_1031_KORONA.Rdata", "SvSchool_1031_manual.Rdata", "SvSchool_1031_noise.Rdata"),load,.GlobalEnv)
-
+#ここから
+#==============================================#
+#### Read raw data of 3 categories (SD1031) ####
+#==============================================#
+lapply(c("C:/Users/a37907/Desktop/KnowSandeel15781/Data/SvSchool_1031_KORONA.Rdata", 
+         "C:/Users/a37907/Desktop/KnowSandeel15781/Data/SvSchool_1031_manual.Rdata", 
+         "C:/Users/a37907/Desktop/KnowSandeel15781/Data/SvSchool_1031_noise.Rdata"),load,.GlobalEnv)
 
 SvSchool_1031.dt <- rbind(SvSchool_1031_KORONA.dt, SvSchool_1031_manual.dt, SvSchool_1031_noise.dt)
 SvSchool_1031.dt <- SvSchool_1031.dt[!is.na(SvSchool_1031.dt$value), ]
@@ -520,7 +533,9 @@ setDT(Sv.dt)[, sV := 10^(Sv/10)]
 setDT(Sv.dt)[, sV38 := sV[Frequency==38], by = c("id", "PingNumber", "SampleNo")]
 #== frequency response by school id use mean sV of school  ==#
 setDT(Sv.dt)[, sV_mean := mean(sV), by = c("id", "Frequency")][, rf := sV_mean/sV_mean[Frequency==38], by = c("id")]
+setDT(Sv.dt)[, sV_max := max(sV), by = c("id", "Frequency")][, sV_min := min(sV), by = c("id", "Frequency")]
 setDT(Sv.dt)[, PingNo := max(PingNumber)-min(PingNumber) + 1, by ="id"][, sV_stdv := sd(sV), by = c("id", "Frequency")][, SE_f := sV_stdv/sqrt(PingNo*SampleCount), by = c("id", "Frequency")][, SE := SE_f/mean(sV38), by = c("id", "Frequency")]
+setDT(Sv.dt)[, sV_var := var(sV), by = c("id", "Frequency")]
 setDT(Sv.dt)[, pixelNo := length(sV), by = c("id", "Frequency")]
 #== time ==#
 library(stringr)
@@ -556,16 +571,18 @@ Sv.dt[, yoko4 := yoko3/.N, by=c("id", "Frequency","PingNumber")][,yoko5:=sum(yok
 Sv.dt[, tate := c(1, diff(PingNumber)), by=c("id", "Frequency", "SampleNo")][, tate2 := ifelse(tate!=1, depth_bin*2, 0)][, tate3:=sum(tate2)+depth_bin*2, by=c("id", "Frequency", "SampleNo")]
 Sv.dt[, tate4 := tate3/.N, by=c("id", "Frequency", "SampleNo")][,tate5:=sum(tate4), by=c("id", "Frequency")][,tate:=NULL][,tate2:=NULL][,tate3:=NULL][,tate4:=NULL]
 Sv.dt[, Perimeter:= yoko5+tate5][,yoko5:=NULL][,tate5:=NULL]
+#== Fractal dimension ==#
+Sv.dt[, Fractal:= 2*(log(Perimeter / 4))/log(school_area) ]
 #
 #== !! save all pixel data !!choose correct name!! ==#
-#save(Sv.dt, file="SvSchool_EROS.Rdata") 
-#save(Sv.dt, file="SvSchool_1032.Rdata")
-save(Sv.dt, file="SvSchool_1031.Rdata")
+#save(Sv.dt, file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/SvSchool_EROS.Rdata") 
+#save(Sv.dt, file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/SvSchool_1032.Rdata")
+save(Sv.dt, file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/SvSchool_1031.Rdata")
 
 
 #== make r(f) data table ==#
 School.dt <- with(Sv.dt, aggregate(Sv.dt[,c("Latitude", "Longitude", "YMD_time", "weighted_meanDepth","nor_Depth","nor_DepthStart", "nor_DepthStop", "DepthfromBottom")], 
-                                   list(id, category, Frequency, Date, PingNo, pixelNo, SampleCount,DepthStart, DepthStop, sV_mean,sV_stdv, rf,SE,sA, school_area, school_length, meanDepth, Perimeter), mean))
+                                   list(id, category, Frequency, Date, PingNo, pixelNo, SampleCount,DepthStart, DepthStop, sV_mean,sV_max, sV_min, sV_stdv, rf,SE,sA, school_area, school_length, meanDepth, Perimeter, Fractal), mean))
 School.dt <- as.data.table(School.dt)
 setnames(School.dt, c("Group.1", "Group.2", "Group.3", "Group.4", "Group.5", "Group.6", "Group.7","Group.8", "Group.9","Group.10", "Group.11", "Group.12", "Group.13", "Group.14", "Group.15", "Group.16",  "Group.17", "Group.18"), 
          c("id", "category", "Frequency", "Date", "PingNo", "pixelNo", "SampleCount","DepthStart", "DepthStop","sV_mean", "sV_stdv", "rf", "SE","sA","school_area", "school_length", "meanDepth", "Perimeter"))
@@ -586,7 +603,7 @@ School.dt$altitude_degree <- School.dt$altitude*180/pi #convert from radian to d
 #= read area info and classify data to the areas =#
 library(geojsonio)
 library(broom)
-spdf <- tidy(geojson_read("StratumPolygon.geojson",  what = "sp"))
+spdf <- tidy(geojson_read("C:/Users/a37907/Desktop/KnowSandeel15781/Data/StratumPolygon.geojson",  what = "sp"))
 spdf <- mutate (spdf, area = case_when (id=="1" ~ "AlbjoernLing", id=="2" ~ "Engelsk_Klondyke",
                                         id=="3" ~ "Inner_Shoal_East_2016", id=="4" ~ "Inner_Shoal_North",
                                         id=="5" ~ "Inner_Shoal_West_2018", id=="6" ~ "Inner_Shoal_test",
@@ -625,30 +642,30 @@ setDT(School.dt)[, school_rect:=(school_length*school_height)/school_area]
 setDT(School.dt)[, school_circ:=(Perimeter^2)/(4*pi*school_area)]
 
 #== !! add vessel column !!choose correct vessel name!! ==#
-School.dt$vessel <- "SD1032" #"EROS"/"SD1032"/"SD1032"
+School.dt$vessel <- "SD1031" #"EROS"/"SD1032"/"SD1032"
 
 
 #== save all pixel data !!choose correct name!! ==#
-#save(School.dt, file = "School_EROS.Rdata")
-save(School.dt, file = "School_1032.Rdata")
-#save(School.dt, file = "School_1031.Rdata")
+#save(School.dt, file = "Data/School_EROS.Rdata")
+#save(School.dt, file = "C:/Users/a37907/Desktop/KnowSandeel15781/Data/School_1032.Rdata")
+save(School.dt, file = "C:/Users/a37907/Desktop/KnowSandeel15781/Data/School_1031.Rdata")
 
 #sum(Sv.dt$Frequency == 200 & Sv.dt$rf>1)   ## number of samples: r(f)>1.0 at 200kHz
 
-rm(Sv.dt, School.dt, bottom.json, bottom.dt, SvSchool.dt, SvSchool_1032.dt)
+rm(Sv.dt, School.dt, bottom.json, bottom.dt, SvSchool.dt, SvSchool_1032.dt, SvSchool_1031.dt)
 
 
 #== combine SD1031 and SD1032 + assign new id number ==#
-load("School_1032.Rdata")
+load("Data/School_1032.Rdata")
 School_1032.dt <- School.dt
 
-load("School_1031.Rdata")
+load("Data/School_1031.Rdata")
 School_1031.dt <- School.dt
 
 School_SD.dt <- rbind(School_1031.dt, School_1032.dt)
 setDT(School_SD.dt)[, id:= 1:.N, by=Frequency]
 
-save(School_SD.dt, file="School_SD.Rdata")
+save(School_SD.dt, file="Data/School_SD.Rdata")
 
 rm(School.dt, School_1031.dt, School_1032.dt)
 

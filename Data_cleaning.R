@@ -1,6 +1,7 @@
 rm(list=ls()) # remove all the variables from R environment
 #== random sampling ==#
 #sample(unique(School_rf.dt$id),1)   ## choose 1 from all "id"
+my_theme <- function() theme_bw(base_size=15) + theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
 
 
 
@@ -97,36 +98,21 @@ gps.dt$coverage <- as.numeric(gps.dt$coverage)
 #== run by vessel ==#
 v = as.character("EROS") # "SD1031" / "SD1032" / "EROS"
 tmp <- gps.dt[vessel%in%v] 
-tmp <- data.frame(tmp)
-
-for (i in 2:nrow(tmp)){
-  if (tmp[i,]$time_diff >= 24)                                        #if time_diff is over 24 hours
-    tmp[i,]$coverage <- tmp[(i-1),]$coverage + 1                      #coverage number + 1
-  else if (tmp[i,]$area != tmp[(i-1),]$area &&                        #if time_diff is less than 24h and area[i] is not equal to area[i-1],
-           nrow(filter(tmp[i:(i+49),], area == tmp[i,]$area))>=40 &&  # and if area[i] continues more than 40 in the next 50 rows
-           tmp[i,]$area != tmp[tmp$coverage == tmp$coverage[i-1],]$area[1])   # and if area[i] is not equal to
-    tmp[i,]$coverage <- tmp[(i-1),]$coverage + 1                      #coverage number + 1
-  else
-    tmp[i,]$coverage <- tmp[(i-1),]$coverage                          #if not, coverage number[i] = coverage number [i-1]
-}
 
 #==============================================================#
 for (i in 2:nrow(tmp)){
-  if (tmp$time_diff[i] >= 24)
-    tmp$coverage[i] <- tmp$coverage[(i-1)] + 1
-  else if (tmp$area[i] != tmp$area[(i-1)] && 
-           nrow(filter(tmp[i:(i+49)], area == tmp$area[i]))>=40 && 
-           tmp$area[i]!= tmp[coverage == coverage[i-1]]$area[1])
-    tmp$coverage[i] <- tmp$coverage[(i-1)] + 1
+  if (tmp$time_diff[i] >= 24)                                         #if time_diff is over 24 hours
+    tmp$coverage[i] <- tmp$coverage[(i-1)] + 1                        #coverage number + 1
+  else if (tmp$area[i] != tmp$area[(i-1)] &&                          #if time_diff is less than 24h and area[i] is not equal to area[i-1],
+           nrow(filter(tmp[i:(i+49)], area == tmp$area[i]))>=40 &&    # and if area[i] continues more than 40 in the next 50 rows
+           tmp$area[i] != tmp[coverage == coverage[i-1]]$area[1])     # and if area[i] is not equal to...
+    tmp$coverage[i] <- tmp$coverage[(i-1)] + 1                        #coverage number + 1
   else
-    tmp$coverage[i] <- tmp$coverage[(i-1)]
+    tmp$coverage[i] <- tmp$coverage[(i-1)]                            #if not, coverage number[i] = coverage number [i-1]
 }
 #==============================================================#
 
-tmp <- data.table(tmp)
 tmp[, .(cnt= sum(.N)), by= c("coverage", "area")]
-ggplot() +theme_bw(base_size=15) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.title.x = element_blank(),axis.title.y = element_blank(), axis.text = element_text(size=5,), axis.ticks.length  = unit(1, "mm"), strip.text = element_text(size = 7))+
-  geom_path(data = tmp, aes(Longitude, Latitude, colour=as.factor(coverage)))+ scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + facet_wrap(~coverage, scales="free")
 
 outside <- gps.dt[vessel%in%v & area%in%"outside"]
 outside$coverage<- as.character(outside$coverage)
@@ -137,36 +123,59 @@ assign(paste("tmp", v, sep = "_"), tmp)
 
 
 ## combine 3 data.table
-gps.dt <- data.table(rbind(EROS, SD1031, SD1032))
+gps.dt <- data.table(rbind(tmp_EROS, tmp_SD1031, tmp_SD1032))
 setDT(gps.dt)[, time_diff:=NULL]
-rm(EROS, SD1031, SD1032, tmp, outside, x)
+rm(tmp_EROS, tmp_SD1031, tmp_SD1032, tmp, outside, x)
 
-#== add distance column ==#
-library(geosphere)
-gps.dt <- gps.dt[order(vessel,coverage, YMD_time),]
-gps.dt$distance[2:nrow(gps.dt)] <- sapply(2:nrow(gps.dt), function(x) distm(gps.dt[x-1, c('Longitude', 'Latitude')], gps.dt[x, c('Longitude', 'Latitude')], fun = distHaversine))
-setDT(gps.dt)[gps.dt[, .I[1], by=c("coverage","vessel")]$V1, distance:=0]
-setDT(gps.dt)[, distance_sum:=sum(distance), by = c("coverage", "vessel")]
-gps_1.dt <- gps.dt
-save(gps_1.dt, file="gps_1.Rdata")
-
-#== coverage ==#
-load("gps_1.Rdata")
+#== assign coverage name ==#
+load("C:/Users/a37907/Desktop/KnowSandeel15781/Data/gps_1.Rdata")
+load("Data/spdf.Rdata")
 gps.dt <- gps_1.dt
-setDT(gps.dt)[, coverage := ifelse(sum(.N)<=1000, "x", coverage), by=c("coverage", "vessel")]
+# coverage names
+setDT(gps.dt)[, coverage := ifelse(sum(.N)<=1000, paste(coverage,"x", sep = "."), coverage), by=c("coverage", "vessel")]
 setDT(gps.dt)[, coverage_no := paste(vessel, coverage, sep = "-")]
-name <- as.data.table(as.table(with(gps.dt,by(area,coverage_no,function(xx)names(which.max(table(xx)))))))
+name <- as.data.table(as.table(with(gps.dt, by(area, coverage_no, function(xx)names(which.max(table(xx)))))))
 setDT(name)[, vessel := gsub('-.*',"",coverage_no)]
 setDT(name)[, group_no := order(coverage_no), by  = c("N","vessel")]
-setDT(name)[, coverage := ifelse(gsub('.*-',"",name$coverage_no)==("F") | gsub('.*-',"",name$coverage_no)==("x"), gsub('.*-',"",coverage_no), paste(vessel, N, group_no, sep="-"))]
+setDT(name)[, coverage := ifelse(gsub('.*-',"",name$coverage_no) == ("F") , 
+                                 coverage_no, paste(vessel, N, group_no, sep="-"))]
+setDT(name)[, coverage := ifelse(endsWith(name$coverage_no, "x"),
+                                  paste(coverage, "x", sep = "."), coverage)]
 temp <- data.table(coverage_no = name$coverage_no, coverage_name = name$coverage)
+# merge with gps.dt
 gps.dt <- merge(x = gps.dt, y = temp, by = "coverage_no", all.x = TRUE)
+# coverage continuously traveled -> split into 2 by time
 setDT(gps.dt)[, coverage_name := ifelse(coverage_name == "SD1032-Engelsk_Klondyke-3", ifelse(YMD_time<=as.POSIXct('2019-06-14 23:59:59', tz="UTC"), "SD1032-Engelsk_Klondyke-3", "SD1032-Engelsk_Klondyke-4") ,coverage_name)]
 setDT(gps.dt)[, coverage_name := ifelse(coverage_name == "SD1031-Vikingbanken-1", ifelse(YMD_time<=as.POSIXct('2019-06-04 08:43:00', tz="UTC"), "SD1031-Vikingbanken-1", "SD1031-Vikingbanken-2") ,coverage_name)]
 setDT(gps.dt)[, coverage_name := ifelse(coverage_name %in% c("SD1031-Inner_Shoal_North-1", "SD1031-VestbankenSouthWest-1", "SD1031-VestbankenSouthWest-2"), "Transect", coverage_name)]
-setDT(gps.dt)[,StartTime:=min(YMD_time), by=(coverage_name)][, StopTime:=max(YMD_time), by=(coverage_name)]
-ggplot() + theme_bw() + theme(panel.grid = element_blank(), axis.title = element_blank()) + 
-  geom_point(data=gps.dt[!area%in%"outside"], aes(x=Longitude, y=Latitude, colour=vessel), size=.05, alpha =0.2) +
+# add start and end time
+setDT(gps.dt)[, StartTime:=min(YMD_time), by=(coverage_name)]
+setDT(gps.dt)[, StopTime:=max(YMD_time), by=(coverage_name)]
+# add distance column #
+library(geosphere)
+gps.dt <- gps.dt[order(vessel,coverage_name, YMD_time),]
+gps.dt$distance[2:nrow(gps.dt)] <- sapply(2:nrow(gps.dt), function(x) distm(gps.dt[x-1, c('Longitude', 'Latitude')], gps.dt[x, c('Longitude', 'Latitude')], fun = distHaversine))
+setDT(gps.dt)[gps.dt[, .I[1], by=c("coverage_name","vessel")]$V1, distance:=0]
+setDT(gps.dt)[, distance_sum:=sum(distance), by = c("coverage_name", "vessel")]
+
+#plot with start end time
+label <- data.table(aggregate(gps.dt$YMD_time ~ gps.dt$coverage_name + gps.dt$vessel, FUN = min), 
+                    aggregate(gps.dt$YMD_time ~ gps.dt$coverage_name + gps.dt$vessel, FUN = max)[3])
+colnames(label) <- c("coverage_name", "vessel", "start", "end")
+label[gps.dt, on = 'coverage_name', area := area][gps.dt, on = 'coverage_name', distance_sum := distance_sum]
+## "Engelsk_Klondyke", "Vikingbanken","AlbjoernLing", "Ostbanken", "Nordgyden", "Outer_Shoal"
+## "Inner_Shoal_East_2016", "Inner_Shoal_North", "Inner_Shoal_test", "Inner_Shoal_West_2018"
+## "Vestbanken_North", "VestbankenSouthEast", "VestbankenSouthWest"
+a <- c("VestbankenSouthWest")
+v <- "EROS"
+text <- label[label$area %like% a & label$vessel %in% v]
+ggplot() + my_theme() + theme(axis.title = element_blank()) +
+  geom_polygon(data= subset(spdf, area == a), aes(long,lat, group=area), col="black", alpha=.2) +
+  geom_point(data=gps.dt[area %in% a & vessel %in% v], 
+             aes(x = Longitude, y = Latitude), size=.05, alpha =0.2) +
+  geom_text(data = text, aes(x = -Inf, y = Inf, label = start), hjust   = 0, vjust   = 1) + 
+  geom_text(data = text, aes(x = -Inf, y = -Inf, label = end), hjust   = 0, vjust   = 0) + 
+  #geom_text(data = text, aes(x = -Inf, y = Inf, label = round(distance_sum, digits = 0)), hjust   = 0.7, vjust   = 0) + 
   facet_wrap(~coverage_name, scales="free")
 gps.dt[, .(cnt= sum(.N)), by= c("vessel", "coverage_name")]
 
@@ -174,7 +183,7 @@ gps.dt[, .(cnt= sum(.N)), by= c("vessel", "coverage_name")]
 #save(sd1031.df, file="sd1031.Rdata")
 #save(sd1032.df, file="sd1032.Rdata")
 save(gps.dt, file="gps.Rdata")
-
+rm(name, temp, gps_1.dt, text, label)
 
 #==========================================================================================================================================#
 #### environment data   ####
@@ -534,7 +543,8 @@ setDT(Sv.dt)[, sV38 := sV[Frequency==38], by = c("id", "PingNumber", "SampleNo")
 #== frequency response by school id use mean sV of school  ==#
 setDT(Sv.dt)[, sV_mean := mean(sV), by = c("id", "Frequency")][, rf := sV_mean/sV_mean[Frequency==38], by = c("id")]
 setDT(Sv.dt)[, sV_max := max(sV), by = c("id", "Frequency")][, sV_min := min(sV), by = c("id", "Frequency")]
-setDT(Sv.dt)[, PingNo := max(PingNumber)-min(PingNumber) + 1, by ="id"][, sV_stdv := sd(sV), by = c("id", "Frequency")][, SE_f := sV_stdv/sqrt(PingNo*SampleCount), by = c("id", "Frequency")][, SE := SE_f/mean(sV38), by = c("id", "Frequency")]
+setDT(Sv.dt)[, PingNo := max(PingNumber)-min(PingNumber) + 1, by ="id"][, sV_stdv := sd(sV), by = c("id", "Frequency")]
+setDT(Sv.dt)[, SE_f := sV_stdv/sqrt(PingNo*SampleCount), by = c("id", "Frequency")][, SE := SE_f/mean(sV38), by = c("id", "Frequency")] #standard error of
 setDT(Sv.dt)[, sV_var := var(sV), by = c("id", "Frequency")]
 setDT(Sv.dt)[, pixelNo := length(sV), by = c("id", "Frequency")]
 #== time ==#
@@ -582,10 +592,18 @@ save(Sv.dt, file="C:/Users/a37907/Desktop/KnowSandeel15781/Data/SvSchool_1031.Rd
 
 #== make r(f) data table ==#
 School.dt <- with(Sv.dt, aggregate(Sv.dt[,c("Latitude", "Longitude", "YMD_time", "weighted_meanDepth","nor_Depth","nor_DepthStart", "nor_DepthStop", "DepthfromBottom")], 
-                                   list(id, category, Frequency, Date, PingNo, pixelNo, SampleCount,DepthStart, DepthStop, sV_mean,sV_max, sV_min, sV_stdv, rf,SE,sA, school_area, school_length, meanDepth, Perimeter, Fractal), mean))
+                                   list(id, category, Frequency, Date, PingNo, pixelNo, SampleCount,DepthStart, DepthStop, sV_mean,sV_max, sV_min, sV_stdv, sV_var, rf,SE,sA, school_area, school_length, meanDepth, Perimeter, Fractal), mean))
 School.dt <- as.data.table(School.dt)
-setnames(School.dt, c("Group.1", "Group.2", "Group.3", "Group.4", "Group.5", "Group.6", "Group.7","Group.8", "Group.9","Group.10", "Group.11", "Group.12", "Group.13", "Group.14", "Group.15", "Group.16",  "Group.17", "Group.18"), 
-         c("id", "category", "Frequency", "Date", "PingNo", "pixelNo", "SampleCount","DepthStart", "DepthStop","sV_mean", "sV_stdv", "rf", "SE","sA","school_area", "school_length", "meanDepth", "Perimeter"))
+setnames(School.dt, c("Group.1", "Group.2", "Group.3", "Group.4", "Group.5", 
+                      "Group.6", "Group.7","Group.8", "Group.9","Group.10", 
+                      "Group.11", "Group.12", "Group.13", "Group.14", "Group.15", 
+                      "Group.16",  "Group.17", "Group.18", "Group.19", "Group.20", 
+                      "Group.21", "Group.22"), 
+         c("id", "category", "Frequency", "Date", "PingNo", 
+           "pixelNo", "SampleCount","DepthStart", "DepthStop","sV_mean",
+           "sV_max", "sV_min", "sV_stdv", "sV_var", "rf", 
+           "SE","sA","school_area", "school_length", "meanDepth", 
+           "Perimeter","Fractal"))
 School.dt <- School.dt[order(id),]
 attr(School.dt$YMD_time, "tzone") <- "UTC"
 
@@ -656,10 +674,10 @@ rm(Sv.dt, School.dt, bottom.json, bottom.dt, SvSchool.dt, SvSchool_1032.dt, SvSc
 
 
 #== combine SD1031 and SD1032 + assign new id number ==#
-load("Data/School_1032.Rdata")
+load("C:/Users/a37907/Desktop/KnowSandeel15781/Data/School_1032.Rdata")
 School_1032.dt <- School.dt
 
-load("Data/School_1031.Rdata")
+load("C:/Users/a37907/Desktop/KnowSandeel15781/Data/School_1031.Rdata")
 School_1031.dt <- School.dt
 
 School_SD.dt <- rbind(School_1031.dt, School_1032.dt)

@@ -1,21 +1,32 @@
+rm(list=ls())
 library(dplyr)
 library(data.table)
 library(ggplot2)
-my_theme <- function() theme_bw() + theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+my_theme <- function() theme_bw(base_size=15) + theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
 
 #================================#
 ####         Load data        ####
 #================================#
-lapply(c("Data/sandeel.Rdata", "Data/School_EROS.Rdata"),load,.GlobalEnv)
+lapply(c("Data/sandeel.Rdata", "Data/School_EROS.Rdata", "Data/spdf.Rdata", "gps.Rdata"),load,.GlobalEnv)
 School_EROS.dt <- School.dt
 rm(School.dt)
-load("C:/Users/a37907/Desktop/Data/gps.Rdata")
-load("C:/Users/a37907/Desktop/Data/env.Rdata")
+#== add bottom depth and coverage_name ==#
+School_EROS.dt$bottom_Depth <- School_EROS.dt$weighted_meanDepth / School_EROS.dt$nor_Depth
+School_EROS.dt <- School_EROS.dt[Frequency %in% 200 & category%in%"SAND"]
+label <- unique(data.table(vessel = gps.dt$vessel, coverage_name = gps.dt$coverage_name, 
+                           StartTime = gps.dt$StartTime, StopTime = gps.dt$StopTime,
+                           distance_sum = gps.dt$distance_sum, area = gps.dt$area))
+setDT(School_EROS.dt)[setDT(label), on =. (YMD_time >= StartTime, 
+                                       YMD_time <= StopTime,
+                                       area == area, vessel == vessel), 
+                  coverage_name := coverage_name]
 
-#====  LDA results   ===# (if needed)
-lapply(c("Data/score.Rdata", "Data/coef.Rdata", "Data/confusion.matrix.Rdata", "Data/slda.lst.Rdata"),load,.GlobalEnv)
-load("C:/Users/a37907/Desktop/Data/slda.lst.Rdata")
-#===================================#
+
+#====     LDA results & env.data  =========# (if needed)
+lapply(c("Data/score.Rdata", "Data/coef.Rdata", "Data/confusion.matrix.Rdata"),load,.GlobalEnv)
+load("C:/Users/a37907/Desktop/KnowSandeel15781/Data/slda.lst.Rdata")
+load("C:/Users/a37907/Desktop/KnowSandeel15781/Data/env.Rdata")
+#==========================================#
 
 
 #====  combine SD and EROS  ====#
@@ -70,13 +81,9 @@ sandeel.dt |>
                  colour = vessel),
              shape = 1, alpha = 1) +
   scale_x_datetime(date_labels="%H") +
-  facet_wrap(~strftime(YMD_time, "%m", tz="UTC")) + 
+  #facet_wrap(~strftime(YMD_time, "%m", tz="UTC")) + 
+  facet_wrap(~strftime(YMD_time, "%W", tz="UTC")) + 
   labs(y = "normalised depth", x = "time of day")
-
-
-
-
-
 
 
 l <- c("April", "May", "June", "July", "August")
@@ -87,8 +94,9 @@ names(l) <- c("04", "05", "06", "07", "08")
 a = c("Engelish Klondyke")
 
 ggplot() +
-  theme_bw(base_size=15) + theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), axis.title.x = element_blank()) + 
-  geom_boxplot(data=data[area_2%in%a], aes(x=month, y=meanDepth, fill=vessel)) + scale_y_reverse() + 
+  my_theme() + theme(axis.title.x = element_blank()) + 
+  geom_boxplot(data = data[area_2%in%a], aes(x = month, y = meanDepth, fill = vessel)) + 
+  scale_y_reverse() + 
   scale_x_discrete(labels = l) +
   labs(y="Depth of school (m)", title = a)
 #
@@ -102,6 +110,233 @@ ggplot() +
 
 
 
+#============================#
+#### time series analysis ####
+#============================#
+
+#== gps data ==#
+label <- unique(data.table(vessel = gps.dt$vessel, coverage_name = gps.dt$coverage_name, 
+                   StartTime = gps.dt$StartTime, StopTime = gps.dt$StopTime,
+                   distance_sum = gps.dt$distance_sum, area = gps.dt$area))
+spdf_tmp <-  data.table(merge(x = spdf, y = label, by = "area", all.x = TRUE))
+
+#= plot gps and school by coverage_name =#
+## "Engelsk_Klondyke", "Vikingbanken","AlbjoernLing", "Ostbanken", "Nordgyden", "Outer_Shoal"
+## "Inner_Shoal_East_2016", "Inner_Shoal_North", "Inner_Shoal_test", "Inner_Shoal_West_2018"
+## "Vestbanken_North", "VestbankenSouthEast", "VestbankenSouthWest"
+a <- c("Vestbanken_North", "VestbankenSouthEast", "VestbankenSouthWest")
+v <- c("SD1031")
+text <- label[label$area %in% a & label$vessel %in% v]
+spdf_coverage_name <- spdf_tmp[spdf_tmp$coverage_name %in% text$coverage_name ]
+ggplot() + my_theme() + 
+  geom_path(data = gps.dt[vessel %in% v & area %in% a], 
+                     aes(x = Longitude, y = Latitude), lwd =.1) + 
+  geom_polygon(data= spdf_coverage_name, aes(long,lat, group=area), col="black", alpha=.2) + 
+  geom_text(data = text, aes(x = -Inf, y = Inf, label = StartTime), hjust   = 0, vjust   = 1) + 
+  geom_text(data = text, aes(x = -Inf, y = -Inf, label = StopTime), hjust   = 0, vjust   = 0) +
+  geom_point(data = sandeel.dt[area %in% a & vessel %in% v], 
+             aes(x = Longitude, y = Latitude), shape = 1, size = 1, col = "red") +
+  facet_wrap(~coverage_name, scales="free")
+
+#= gps and SD school by month =#
+m <- as.character("06")
+ggplot() + 
+  geom_path(data = gps.dt[month %in% m & vessel %in% c("SD1031", "SD1032")], 
+            aes(x = Longitude, y = Latitude, colour = vessel), lwd =.1) +
+  geom_polygon(data= spdf, aes(long,lat, group=area), col="black", alpha=.2) + 
+  geom_point(data = sandeel.dt[strftime(YMD_time, "%m", tz="UTC") %in% m], 
+             aes(x = Longitude, y = Latitude), shape = 1, size = 1)
+#==============================#
+
+
+#==  calculate sL   ==#
+data <- rbind(sandeel.dt, School_EROS.dt) 
+data[, .(cnt= sum(.N)), by= c("vessel", "coverage_name", "area")]
+setDT(data)[, sA_sum:= sum(sA), by=c("coverage_name", "vessel")]
+data[label, on = 'coverage_name', distance_sum := distance_sum]
+data$sL <- data$sA_sum/data$distance_sum
+data[ ,YMD_time_mean := mean(YMD_time), by=c("coverage_name", "vessel")]
+
+# plot
+library(ggrepel)
+ggplot() + my_theme() + theme(legend.position = "none", axis.title.x = element_blank())+
+  geom_point(data = data[!vessel %in% "EROS" & !coverage_name %like% ".x"], 
+             aes(x = YMD_time_mean, y = log(sL), fill=vessel), shape = 21) +
+  #geom_point(data = data[!vessel %in% "EROS" & coverage_name %like% ".x"], 
+  #           aes(x = YMD_time_mean, y = log(sL)), fill = "white", shape = 21) +
+  #geom_label_repel(data = data[!vessel %in% "EROS" & !duplicated(data[,c('coverage_name')]),],
+  #                 aes(x = YMD_time_mean, y = log(sL), label = area),
+  #                 box.padding   = .5, label.padding = .15, point.padding = .1, 
+  #                 force = 10, max.overlaps = length(unique(data$coverage_name)), 
+  #                 min.segment.length = .1 ,size = 2) + 
+  xlim(min(data$YMD_time_mean),max(data$YMD_time_mean)) + 
+  ylim(min(log(data$sL)), max(log(data$sL))) + 
+  labs(y="log(total school NASC / travel distance)")
+#======================#
+
+
+
+#== GAM ==#
+library(mgcv)
+gam_sL <- gam(log(sL) ~ s(unclass(YMD_time_mean)), 
+              data = data[!vessel %in% "EROS" & 
+                          !coverage_name %like% ".x" & 
+                          !duplicated(data[,c('coverage_name')]),], 
+              family = gaussian )
+
+gam_sL_EROS <- gam(log(sL) ~ s(unclass(YMD_time_mean)), 
+              data = data[!coverage_name %like% ".x" & 
+                            !duplicated(data[,c('coverage_name')]),], 
+              family = gaussian )
+
+lm_sL <- lm(log(sL) ~ unclass(YMD_time_mean), 
+              data = data[!vessel %in% "EROS" & 
+                            !coverage_name %like% ".x" & 
+                            !duplicated(data[,c('coverage_name')]),])
+
+ggplot(cbind(data[
+    #!vessel %in% "EROS" & 
+    !coverage_name %like% ".x" & 
+    !duplicated(data[,c('coverage_name')]),],
+             fit = fitted(gam_sL_EROS)),
+             aes(x = YMD_time_mean, y = log(sL))) +
+  geom_point(aes(fill = vessel), shape = 21) + 
+  my_theme() + theme(legend.position = c(.9,.2)) + 
+  geom_line(aes(y = fit), colour = "red") +
+  geom_smooth(method='lm', formula= y~x, se = FALSE, col = "black", lwd = .5) +
+  xlim(min(data$YMD_time_mean), max(data$YMD_time_mean)) + 
+  ylim(min(log(data$sL)), max(log(data$sL))) + 
+  labs(x = "", y = "log(total school NASC / travel distance)")
+
+#=========#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#========================================================================================================================#
+#### test code    ####  
+#========================================================================================================================#
 
 #===========================#
 ####      horizontal     ####
@@ -245,14 +480,58 @@ ggplot()+theme_bw()+theme(axis.title.x=element_blank(),axis.text.x = element_tex
   labs(y="log(school NASC)")
 
 
-#============================#
-#### time series analysis ####
-#============================#
 
+
+
+
+
+#=============================#
+#### time series analysis  ####
+#=============================#
 
 #== coverage data ==#
 data <- rbind(sandeel.dt, School_EROS.dt[Frequency%in%200 & category%in%"SAND" & !area %in% "outside" ]) #rbind(sandeel.dt, School_EROS.dt[Frequency%in%200 & category%in%"SAND" & !area %in% "outside" ]) #sandeel.dt #& school_area >= median(School_EROS.dt$school_area)
 data$month <- strftime(data$YMD_time, "%m", tz="UTC")
+data <- data[order(vessel, area, YMD_time),]
+setDT(data)[, time_diff:=as.numeric(difftime(data$YMD_time, lag(data$YMD_time), units = "hours"))]
+setDT(data)[, coverage:=as.numeric(1)]
+data$coverage <- as.numeric(data$coverage)
+
+#== run by vessel ==#
+v = as.character("SD1032") # "SD1031" / "SD1032" / "EROS"
+tmp <- data[vessel %in% v] 
+
+#==============================================================#
+for (i in 2:nrow(tmp)){
+  if (tmp$time_diff[i] >= 24)                                         #if time_diff is over 24 hours
+    tmp$coverage[i] <- tmp$coverage[(i-1)] + 1                        #coverage number + 1
+  else if (tmp$area[i] != tmp$area[(i-1)])                            #if time_diff is less than 24h and area[i] is not equal to area[i-1]
+    tmp$coverage[i] <- tmp$coverage[(i-1)] + 1                        #coverage number + 1
+  else if (tmp$area[i] != tmp$area[(i-1)] &&                          #if time_diff is less than 24h and area[i] is not equal to area[i-1],
+           nrow(filter(tmp[i:(i+49)], area == tmp$area[i]))>=40 &&    # and if area[i] continues more than 40 in the next 50 rows
+           tmp$area[i] != tmp[coverage == coverage[i-1]]$area[1])     # and if area[i] is not equal to...
+    tmp$coverage[i] <- tmp$coverage[(i-1)] + 1                        #coverage number + 1
+  else
+    tmp$coverage[i] <- tmp$coverage[(i-1)]                            #if not, coverage number[i] = coverage number [i-1]
+}
+#==============================================================#
+
+
+
+tmp[, .(cnt= sum(.N)), by= c("coverage", "area")]
+ggplot() + my_theme() + theme(axis.title = element_blank(), axis.text = element_text(size=5,), axis.ticks.length  = unit(1, "mm"), strip.text = element_text(size = 7))+
+  geom_path(data = gps.dt[vessel %in% v], aes(x = Longitude, y = Latitude)) + 
+  geom_point(data = tmp, aes(Longitude, Latitude, colour=as.factor(vessel))) + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) +
+  facet_wrap(~coverage, scales="free")
+assign(paste("tmp", v, sep = "_"), tmp)
+
+## combine 3 data.table ## (after making 3 data.frame)
+data <- data.table(rbind(tmp_EROS, tmp_SD1031, tmp_SD1032))
+setDT(data)[, time_diff:=NULL]
+rm(tmp_EROS, tmp_SD1031, tmp_SD1032, tmp)
+
+#== count number of schools  ==#
 data[, .(cnt= sum(.N)), by= c("vessel", "coverage", "area")]
 gps.dt[, .(cnt= sum(.N)), by= c("vessel", "coverage", "area")]
 
@@ -268,6 +547,16 @@ setDT(data)[, sA_sum:= sum(sA), by=c("coverage_name", "vessel")]
 
 
 #== check if the name correctly assigned ==#
+v<- "SD1031"
+ggplot() + my_theme() + 
+  geom_path(data = gps.dt[!area %in% "outside" & !coverage_name %in% "x" & vessel %in% v ], 
+            aes(x = Longitude, y = Latitude), lwd =.1) +
+  #geom_polygon(data= spdf, aes(long,lat, group=area), col="black", alpha=.2) + 
+  geom_point(data = data[vessel %in% v],
+             aes(x = Longitude, y = Latitude), 
+             shape = 1, size = 1, colour = "red") + 
+  facet_wrap(~coverage_name, scales = "free")
+#==============================#
 x_gps <- with(gps.dt, aggregate(gps.dt[,c("Latitude", "Longitude", "YMD_time")], list(coverage_name, distance_sum, vessel), mean))
 setnames(x_gps, c("Group.1", "Group.2", "Group.3"), c("coverage_name", "distance_sum", "vessel"))
 x_dat <- with(data, aggregate(data[,c("Latitude", "Longitude", "YMD_time")], list(coverage_name, sA_sum), mean))
@@ -281,6 +570,8 @@ ggplot(data=x[!coverage_name%in%c("F","x")]) + theme(legend.position = "none") +
   scale_y_continuous(limits = c(56.5,58.5))+
   facet_wrap(month.x~vessel)
 
+
+#==  calculate sL   ==#
 x <- x[!coverage_name%in%c("F","x")]
 x$sL <- x$sA_sum/x$distance_sum
 setDT(x)[, area:=sub(".*- *(.*?) *-.*", "\\1", x$coverage_name)]
@@ -290,24 +581,20 @@ setDT(x)[, group_no := order(YMD_time.x), by  = c("area")]
 cov_name <- x[!is.na(sA_sum) & !area%in%"Nordgyden"]$coverage_name
 
 ggplot() +theme_bw() + theme(legend.position = "none", panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.title.x = element_blank(),axis.title.y = element_blank(), axis.text = element_text(size=5,), axis.ticks.length  = unit(1, "mm"), strip.text = element_text(size = 7))+
-  geom_path(data = gps.dt[coverage_name %in% cov_name], aes(Longitude, Latitude, colour=coverage_name))+ scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + facet_wrap(~coverage_name, scales="free")
+  geom_path(data = gps.dt[coverage_name %in% cov_name], 
+            aes(Longitude, Latitude, colour = vessel)) + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+  facet_wrap(~coverage_name, scales="free")
 
-ggplot(data=x[!is.na(sA_sum) & !area%in%"Nordgyden" & !coverage_name %in% c("SD1031-Inner_Shoal_North-1", "SD1032-Inner_Shoal_East_2016-1")])+
-  theme_bw() + theme(panel.grid.major = element_blank(), axis.title.x = element_blank())+
-  geom_point(aes(x=YMD_time.x, y=log(sL), colour=area))+
+ggplot(data = x[!is.na(sA_sum) & 
+                  !area%in%"Nordgyden" & 
+                  !coverage_name %in% c("SD1031-Inner_Shoal_North-1", "SD1032-Inner_Shoal_East_2016-1")],
+       aes(x=YMD_time.x, y=log(sL), colour=vessel))+
+  theme_bw() + my_theme() + theme(legend.position = "none", axis.title.x = element_blank())+
+  geom_point() +
+  geom_text(aes(label = area), hjust = 0.5,  vjust = 0, size = 3) +
   #facet_wrap(~area, scales="free_x")+ 
   labs(y="log(total school NASC / travel distance)")
-
-cov_name <- x[!is.na(sA_sum) & !area%in%"Nordgyden" & !coverage_name %in% c("SD1031-Inner_Shoal_North-1", "SD1032-Inner_Shoal_East_2016-1")]$coverage_name
-
-ggplot() +theme_bw() + theme(legend.position = "none", panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.title.x = element_blank(),axis.title.y = element_blank(), axis.text = element_text(size=5,), axis.ticks.length  = unit(1, "mm"), strip.text = element_text(size = 7))+
-  geom_path(data = gps.dt[coverage_name %in% cov_name], aes(Longitude, Latitude, colour=coverage_name))+ scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + facet_wrap(~coverage_name, scales="free")
-
-spdf <- data.table(spdf)
-ggplot() + 
-  geom_polygon(data=spdf[area%in%"VestbankenSouthWest"], aes(long, lat, group=area), col="black", alpha=.2)+
-  geom_path(data=gps.dt[coverage_name%in%c("SD1031-VestbankenSouthWest-1", "SD1031-VestbankenSouthWest-2")],
-            aes(Longitude, Latitude))+ facet_wrap(~coverage_name, scales="free")
 
 
 

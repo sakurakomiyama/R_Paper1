@@ -37,7 +37,6 @@ School_SD.dt$bottom_Depth <- School_SD.dt$weighted_meanDepth / School_SD.dt$nor_
 
 #library("tidyverse")
 library("caret")
-#library(MASS)
 #== pre-processing ==#
 cols <- c("Date","Latitude", "Longitude", "PingNo", "pixelNo", 
           "SampleCount", "vessel", "area", "YMD_time", "altitude", 
@@ -49,7 +48,7 @@ data <- subset(School_EROS.dt, Frequency %in% c(200)
                # & school_area >= median(School_EROS.dt$school_area)
                )
 data[,cols]=NULL
-data[, Frequency:=NULL]
+data[,Frequency:=NULL]
 # remove negative value of depth from bottom
 for (i in 1:nrow(data)) {
   if (data$DepthfromBottom[i] < 0)
@@ -92,13 +91,13 @@ for (i in 1:nrow(test_SD.data)) {
   if (test_SD.data$DepthfromBottom[i] < 0)
     test_SD.data$DepthfromBottom[i] <- 0
   else
-    test_SD.data$DepthfromBottom[i] <- data$DepthfromBottom[i]
+    test_SD.data$DepthfromBottom[i] <- test_SD.data$DepthfromBottom[i]
 }
 # log transformation #
-test_SD.data[,sV_mean:=log(sV_mean)][,rf:=log(rf)][,school_area:=log(school_area)][,Elongation:=log(Elongation)]
-test_SD.data[,school_rect:=log(school_rect)][,school_circ:=log(school_circ)][,sV_stdv:=log(sV_stdv)]
-test_SD.data[,SE:=log(SE)][,sA:=log(sA)][,school_length:=log(school_length)][,Perimeter:=log(Perimeter)]
-test_SD.data[,DepthfromBottom:=log(DepthfromBottom+1)][,school_height:=log(school_height)]
+test_SD.data[,sV_mean:=log(sV_mean)][,sV_max:=log(sV_max)][,sV_min:=log(sV_min)][,sV_stdv:=log(sV_stdv)]
+test_SD.data[,rf:=log(rf)][,SE:=log(SE)][,sA:=log(sA)][,school_area:=log(school_area)][,school_length:=log(school_length)]
+test_SD.data[,Perimeter:=log(Perimeter)][,DepthfromBottom:=log(DepthfromBottom+1)][,school_height:=log(school_height)]
+test_SD.data[,Elongation:=log(Elongation)][,school_rect:=log(school_rect)][,school_circ:=log(school_circ)]
 
 # Normarize
 preproc.param <- preProcess(test_SD.data[,-c("id")], method = c("center", "scale"))
@@ -109,7 +108,8 @@ ggplot(melt(test_SD.data[,-c("id", "category")]), aes(value))+geom_histogram(bin
 
 #== step-wise LDA * 10,  Saildrone data ==#
 #library(ROCR)
-library(klaR)
+library(klaR) #uses stepclass in the klaR
+library(MASS) 
 maxvar <-(ncol(data))-2
 direction <-"backward"
 test_SD.data <- data.frame(test_SD.data)
@@ -181,12 +181,13 @@ for(i in 1:10) {
   data.lst[[paste0(i,"test")]] <- test.data
 }
 
-rm(temp, temp2, temp3, temp4, temp5, training.samples, preproc.param)
+rm(temp, temp2, temp3, temp4, temp5, slda, training.samples, preproc.param)
 save(score.df, file="score.Rdata")
 save(coef.df, file="coef.Rdata")
 save(confusion.matrix, file="confusion.matrix.Rdata")
 save(slda.lst, file="slda.lst.Rdata")
 save(for_lift, file = "for_lift.Rdata")
+save(data.lst, file = "data.lst.Rdata")
 #
 
 #==  ROC curve  ==#
@@ -226,7 +227,7 @@ lift_df %>%
   #            fill = "red", alpha = .3) + 
   geom_line(colour = "red", lwd = 1.0) + 
   labs(x = "False positive", y = "True positive")
-+++dev.off()
+dev.off()
 #==========================#
 
 
@@ -244,45 +245,72 @@ colnames(sandeel.dt) <- make.unique(names(sandeel.dt)) #for ggplot error
 test_SD.data$predict <- predict(slda.lst[[10]], test_SD.data)
 featurePlot(test_SD.data[, 3:(ncol(test_SD.data)-1)],as.factor(test_SD.data$predict), plot="density", auto.key = list(columns = 2))
 
+#== add coverage_name ==#
+label <- unique(data.table(vessel = gps.dt$vessel, coverage_name = gps.dt$coverage_name, 
+                           StartTime = gps.dt$StartTime, StopTime = gps.dt$StopTime,
+                           distance_sum = gps.dt$distance_sum, area = gps.dt$area))
+setDT(sandeel.dt)[setDT(label), on =. (YMD_time >= StartTime, 
+                                       YMD_time <= StopTime,
+                                       area == area, vessel == vessel), 
+                  coverage_name := coverage_name] 
+
+
 save(sandeel.dt, file="sandeel.Rdata")
 
 
 
 #== biological data ==#
-bio_id <- School_EROS_bio.df[, c("id", "meanLength", "weighted_meanLength")]
-bio_id <- unique(bio_id)
-x <- data.table(matrix(ncol = 4, nrow = 0))
-
-# use training data
-#for(i in 1:length(slda.lst)) {
-#  temp <- data.table(id = data.lst[[paste0(i,"training")]]$id, 
-#                     pred = predict(slda.lst[[i]], data.lst[[paste0(i,"training")]]), 
-#                     data="training", attempt = i)
-#  #temp2  <- data.table(id=test.data$id, pred = predict(slda.lst[[i]], test.data), data="test", attempt = i)
-#  x <- rbind(x, temp, use.names=F)
-#  colnames(x) <- c("id", "pred", "data", "attempt")
-#}
-
-# use test data
+x <- data.table(matrix(ncol = 5, nrow = 0))
 for(i in 1:length(slda.lst)) {
   temp <- data.table(id = data.lst[[paste0(i,"test")]]$id, 
                      pred = predict(slda.lst[[i]], data.lst[[paste0(i,"test")]]), 
+                     obs = data.lst[[paste0(i,"test")]]$category,
                      data = "test", attempt = i)
   x <- rbind(x, temp, use.names=F)
-  colnames(x) <- c("id", "pred", "data", "attempt")
+  colnames(x) <- c("id", "pred", "obs", "data", "attempt")
 }
 
+### method A, B or C ###
+### so far C is best ###
+
+#===  (method A) correctly classified all 10 times   ===#
+# *since ids of test data are different at each training,       #
+#  it's rare to have an ideal id which is sandeel for 10 times. #
+#  Thus, this method is not optimal.*                           #
 x$pred_num <- ifelse(x$pred=="SAND", 1, 0)
 x <- data.table(with(x, aggregate(x[,c("pred_num")], list(id), sum)))
 colnames(x) <- c("id", "pred_num")
 x$pred <- ifelse(x$pred_num==10, "SAND", "OTHER")
 
-bio_id <- x[bio_id, on = "id", roll = TRUE]
+#===  (method B) use the best accuracy model    ===#
+#  *This method also leaves too few ids since      # 
+#   maximum N of ids is 1530 and only schools that #
+#   are observed in biological data can be used.*  #
+x$correct <- ifelse(x$pred == x$obs, 1, 0)
+setDT(x)[, accuracy := sum(correct)/.N, by = c("attempt")]
+i <- unique(x[x$accuracy==max(x$accuracy),]$attempt)
+x <- subset(x, attempt == i)
+
+#===  (method C) use all 10 attempt but only consistent result  ===#
+x$correct <- ifelse(x$pred == x$obs, 1, 0)
+setDT(x)[, accuracy := sum(correct)/.N, by = c("attempt")]
+setDT(x)[, duplicate_id := .N, by = c("id")][, discrepancy := mean(correct), by = c("id")]
+x <- subset(x, discrepancy %in% c(1, 0))
+x <- x[!duplicated(x[,c('id')]),]
+
+#====================================================#
+
+bio_id <- School_EROS_bio.df[, c("id", "meanLength", "weighted_meanLength")]
+bio_id <- unique(bio_id)
+bio_id <- x[bio_id, on = "id", roll = FALSE]
+bio_id <- bio_id[complete.cases(bio_id), ]
 bio_id$pred <- gsub('OTHER', 'Incorrect', bio_id$pred)
 bio_id$pred <- gsub('SAND', 'Correct', bio_id$pred)
 
-boxplot(meanLength~pred, data=bio_id)
-ggplot(bio_id) + theme_bw(base_size=15) + theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), legend.title = element_blank())+
+ggplot(bio_id) + my_theme() + theme(axis.title.x = element_blank()) + 
+  geom_boxplot(aes(x=pred, y = meanLength), fill = "grey") + 
+  labs(y = "mean body length (cm)")
+ggplot(bio_id) + my_theme() + theme(legend.title = element_blank())+
   geom_histogram(aes(x=meanLength, y = stat(density), fill=pred), bins=30, colour="grey50", alpha=0.5, position="dodge") +
   geom_density(aes(x=meanLength, fill=pred), colour="grey50", alpha=0.5) +
   labs(x="mean body length of a trawl catch (cm)", y="Density")
@@ -298,6 +326,10 @@ eros.lda <- merge(x = School_EROS.dt, y = eros.lda, by = "id", all.x = TRUE)
 eros.lda <- eros.lda[Frequency %in% 200 & !category%in%"PSAND" & !pred%in%NA]
 eros.lda <- eros.lda[, c("id", "category","pred","YMD_time", "PingNo","school_area", "DepthStart", "DepthStop", "meanDepth", "area")]
 nrow(eros.lda[category == pred & school_area >=500])/nrow(eros.lda[school_area >=500])
+
+#== variable importance ==#
+varImp(slda.lst[[i]], scale = FALSE)
+plot(varImp(slda.lst[[i]], scale = FALSE))
 
 
 
@@ -1226,6 +1258,25 @@ library(plyr)
 library(MLmetrics)
 ddply(slda$pred, "Resample", summarise,
       accuracy = Accuracy(pred, obs))
+
+
+
+
+
+#== biological data ==#
+#===  (method B) use the best accuracy model    ===#
+result <- data.frame()
+for(i in 1:length(slda.lst)) {
+  temp <- c(i, slda.lst[[i]][["results"]][["Accuracy"]],
+            slda.lst[[i]][["results"]][["Kappa"]])
+  result <- rbind(result, temp)
+}
+colnames(result) <- c("attempt","Accuracy","Kappa")
+i <- result[result$Accuracy==max(result$Accuracy),]$attempt
+x <- data.table(id = data.lst[[paste0(i,"test")]]$id, 
+                pred = predict(slda.lst[[i]], data.lst[[paste0(i,"test")]]), 
+                data = "test", attempt = i)
+
 
 
 

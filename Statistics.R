@@ -10,8 +10,7 @@ my_theme <- function() theme_bw(base_size=15) + theme(panel.grid.minor = element
 lapply(c("Data/sandeel.Rdata", "Data/School_EROS.Rdata", "Data/spdf.Rdata", "gps.Rdata"),load,.GlobalEnv)
 School_EROS.dt <- School.dt
 rm(School.dt)
-#== add bottom depth and coverage_name ==#
-School_EROS.dt$bottom_Depth <- School_EROS.dt$weighted_meanDepth / School_EROS.dt$nor_Depth
+#== add coverage_name ==#
 School_EROS.dt <- School_EROS.dt[Frequency %in% 200 & category%in%"SAND"]
 label <- unique(data.table(vessel = gps.dt$vessel, coverage_name = gps.dt$coverage_name, 
                            StartTime = gps.dt$StartTime, StopTime = gps.dt$StopTime,
@@ -156,6 +155,8 @@ setDT(data)[, sA_sum:= sum(sA), by=c("coverage_name", "vessel")]
 data[label, on = 'coverage_name', distance_sum := distance_sum]
 data$sL <- data$sA_sum/data$distance_sum
 data[ ,YMD_time_mean := mean(YMD_time), by=c("coverage_name", "vessel")]
+library(lubridate)
+data[ ,Julian_day := yday(YMD_time_mean)]
 
 # plot
 library(ggrepel)
@@ -178,13 +179,13 @@ ggplot() + my_theme() + theme(legend.position = "none", axis.title.x = element_b
 
 #== GAM ==#
 library(mgcv)
-gam_sL <- gam(log(sL) ~ s(unclass(YMD_time_mean)), 
+gam_sL <- gam(log(sL) ~  s(Julian_day), #s(unclass(YMD_time_mean)), 
               data = data[!vessel %in% "EROS" & 
                           !coverage_name %like% ".x" & 
                           !duplicated(data[,c('coverage_name')]),], 
               family = gaussian )
 
-gam_sL_EROS <- gam(log(sL) ~ s(unclass(YMD_time_mean)), 
+gam_sL_EROS <- gam(log(sL) ~ s(Julian_day), #s(unclass(YMD_time_mean)),  
               data = data[!coverage_name %like% ".x" & 
                             !duplicated(data[,c('coverage_name')]),], 
               family = gaussian )
@@ -199,12 +200,12 @@ ggplot(cbind(data[
     !coverage_name %like% ".x" & 
     !duplicated(data[,c('coverage_name')]),],
              fit = fitted(gam_sL_EROS)),
-             aes(x = YMD_time_mean, y = log(sL))) +
+             aes(x = Julian_day, y = log(sL))) +
   geom_point(aes(fill = vessel), shape = 21) + 
   my_theme() + theme(legend.position = c(.9,.2)) + 
   geom_line(aes(y = fit), colour = "red") +
   geom_smooth(method='lm', formula= y~x, se = FALSE, col = "black", lwd = .5) +
-  xlim(min(data$YMD_time_mean), max(data$YMD_time_mean)) + 
+  xlim(min(data$Julian_day), max(data$Julian_day)) + 
   ylim(min(log(data$sL)), max(log(data$sL))) + 
   labs(x = "", y = "log(total school NASC / travel distance)")
 

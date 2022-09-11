@@ -58,3 +58,14 @@ dev.new() #open a new plot window
 dev.off() #shut down the window
 #Error in plot.new() : figure margins too large
 xll() # to create a float window for a large plot
+#to save plot
+png(paste0("plot.png") , width = 800, height = 600)
+ggplot() # + ...
+dev.off()
+
+
+#### decimal ####
+round(x, digits = 2)
+
+#### change order ####
+dt <- dt[order(XX),]

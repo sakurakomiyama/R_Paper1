@@ -15,7 +15,7 @@ my_theme <- function() theme_bw(base_size=15) + theme(panel.grid.minor = element
 
 
 #====   school, trawl, bio data   ====#
-lapply(c("Data/School_EROS_bio.df", "Data/spdf.Rdata", "Data/School_SD.Rdata"),load,.GlobalEnv)
+lapply(c("Data/School_EROS_bio.df", "Data/spdf.Rdata", "Data/School_SD.Rdata", "gps.Rdata"),load,.GlobalEnv)
 
 load("Data/School_EROS.Rdata")
 School_EROS.dt <- School.dt
@@ -30,10 +30,6 @@ rm(School.dt)
 #===       find Sandeel school       ===#
 #### Discriminant analyses (LDA/DFA) ####
 #=======================================#
-
-# add bottom depth
-School_EROS.dt$bottom_Depth <- School_EROS.dt$weighted_meanDepth / School_EROS.dt$nor_Depth
-School_SD.dt$bottom_Depth <- School_SD.dt$weighted_meanDepth / School_SD.dt$nor_Depth
 
 #library("tidyverse")
 library("caret")
@@ -122,6 +118,9 @@ for_lift <- data.frame()
 data.lst <- list()
 rm(train.data, test.data)
 
+#==============================#
+####   80% train 20% test   ####
+#==============================#
 for(i in 1:10) {
   score <- 0
   # 80% : training data, 20% : test data
@@ -231,16 +230,128 @@ dev.off()
 #==========================#
 
 
+#======================#
+####   100% train   ####
+#======================#
+for(i in 1:10) {
+  score <- 0
+  # 80% : training data, 20% : test data
+  training.samples <- createDataPartition(data$category, p = 1, list = FALSE) 
+  train.data <- data[training.samples, ]
+  #test.data <- data[-training.samples, ]
+  # Normalize the data (train data)
+  preproc.param <- preProcess(train.data[,-c("id")], method = c("center", "scale"))
+  train.data <- predict(preproc.param, train.data)
+  train.data$category <- as.factor(train.data$category)
+  # Normalize the data (test data)
+  #preproc.param <- preProcess(test.data[,-c("id")], method = c("center", "scale"))
+  #test.data <- predict(preproc.param, test.data)
+  #test.data$category <- as.factor(test.data$category)
+  # tune a model
+  slda <- train(category ~ ., data = train.data[, -c("id")],
+                method = "stepLDA", importance = TRUE,metric = "ROC", tuneLength = 10,
+                trControl = trainControl(method = "repeatedcv", #"repeatedcv" / "cv"
+                                         number = 10, repeats = 3, 
+                                         savePredictions = "all", #"all" / "final"
+                                         classProbs = TRUE), 
+                tuneGrid = data.frame(maxvar,direction),
+  )
+  # store the results
+  temp <- data.frame(id = test_SD.data$id)
+  temp2 <- data.table(slda$finalModel$fit$scaling, keep.rownames = TRUE)
+  temp2$attempt <- i
+  coef.df <- rbind(coef.df, temp2)
+  predictions <- predict(slda, train.data)
+  temp3 <- confusionMatrix(reference=as.factor(train.data$category) , data= predictions, mode = "everything", positive = "SAND")
+  confusion.matrix[[paste0(i,"train")]] <- temp3
+  #predictions <- predict(slda, test.data)
+  #temp4 <- confusionMatrix(reference=as.factor(test.data$category) , data= predictions, mode = "everything", positive = "SAND")
+  #confusion.matrix[[paste0(i,"test")]] <- temp4
+  slda.lst[[i]] <- slda
+  # apply to SD data
+  for(j in 1:nrow(slda$finalModel$fit$scaling)) {
+    score <- score + (slda$finalModel$fit$scaling[j] * test_SD.data[, row.names(slda$finalModel$fit$scaling)[j]])
+  }
+  temp$score <- score
+  temp$pred <- predict(slda, test_SD.data)
+  temp$attempt <- i
+  score.df <- rbind(score.df, temp)
+  # data for ROC curve
+  temp5 <- data.frame(Class = train.data$category, 
+                      lda = predict(slda, train.data, type = "prob")[,"SAND"],
+                      resample = paste0("trial", i))
+  for_lift <- rbind(for_lift, temp5)
+  # store train and test data
+  data.lst[[paste0(i,"train")]] <- train.data
+  #data.lst[[paste0(i,"test")]] <- test.data
+}
+
+rm(temp, temp2, temp3, temp4, temp5, slda, training.samples, preproc.param)
+save(score.df, file="score.Rdata")
+save(coef.df, file="coef.Rdata")
+save(confusion.matrix, file="confusion.matrix.Rdata")
+save(slda.lst, file="slda.lst.Rdata")
+save(for_lift, file = "for_lift.Rdata")
+save(data.lst, file = "data.lst.Rdata")
+#
+
+#==  ROC curve  ==#
+# by each trial
+#for_lift <- data.frame(Class = slda.lst[[trial]]$pred$obs, lda = slda$pred$SAND, resample = slda$pred$Resample)
+#png(paste0("ROC",trial,".png") , width = 800, height = 600)
+
+lift_df <-  data.frame()
+for (fold in unique(for_lift$resample)) {
+  fold_df <- dplyr::filter(for_lift, resample == fold)
+  lift_obj_data <- lift(Class ~ lda, data = fold_df, class = "SAND")$data
+  lift_obj_data$fold = fold
+  lift_df = rbind(lift_df, lift_obj_data)
+  rm(lift_obj_data)
+}
+
+detach(package:plyr) # if "group_by" is not working
 
 
+lift_df %>% 
+  rename(group = n) %>%
+  mutate(False_positive = 1-Sp) %>% 
+  group_by(group) %>% 
+  summarize(mean_Sn = mean(Sn), mean_Sp = mean(False_positive), 
+            sd_Sn = sd(Sn), sd_Sp = sd(False_positive),
+            n_Sn = length(Sn), n_Sp = length(False_positive), 
+            se_Sn = sd_Sn / sqrt(n_Sn), se_Sp = sd_Sp / sqrt(n_Sp), 
+            lower_Sn = mean_Sn - qt(1 - (0.05 / 2), n_Sn - 1) * se_Sn,
+            upper_Sn = mean_Sn + qt(1 - (0.05 / 2), n_Sn - 1) * se_Sn,
+            lower_Sp = mean_Sp - qt(1 - (0.05 / 2), n_Sp - 1) * se_Sp,
+            upper_Sp = mean_Sp + qt(1 - (0.05 / 2), n_Sp - 1) * se_Sp,) %>% 
+  ggplot(aes(x = mean_Sp, y = mean_Sn)) + 
+  my_theme() + 
+  geom_line(data = lift_df, aes(x = 1-Sp, y = Sn, group = fold), alpha = .1, lwd = .1) +
+  #geom_ribbon(aes(ymin = lower_Sn, ymax = upper_Sn,
+  #                xmin = lower_Sp, xmax = upper_Sp),
+  #            fill = "red", alpha = .3) + 
+  geom_line(colour = "red", lwd = 1.0) + 
+  labs(x = "False positive", y = "True positive")
+
+#==========================#
+
+
+
+
+#==========================#
 #== determine ids "SAND" ==#
+#==========================#
+
 ids <- score.df
 ids$pred <- ifelse(score.df$pred=="SAND", 1, 0)
 ids <- with(ids, aggregate(ids[,c("score", "pred")], list(id), mean)) # sandeel 10 times -> mean 1, other 10 times -> mean 0
 ids <- data.table(ids)
+ids_nonsandeel <- ids[pred %in% 0]$Group.1 # extract ids only the mean = 0 (non-sandeel)
 ids <- ids[pred %in% 1]$Group.1 # extract ids only the mean = 1 (sandeel 10 times)
-sandeel.dt <-  subset(School_SD.dt, id %in% ids & Frequency %in% 200)
+sandeel.dt <-  School_SD.dt[id %in% ids & Frequency %in% 200]
+nonsandeel.dt <- School_SD.dt[id %in% ids_nonsandeel & Frequency %in% 200]
 colnames(sandeel.dt) <- make.unique(names(sandeel.dt)) #for ggplot error
+colnames(nonsandeel.dt) <- make.unique(names(nonsandeel.dt))
 
 test_SD.data$predict <- predict(slda.lst[[10]], test_SD.data)
 featurePlot(test_SD.data[, 3:(ncol(test_SD.data)-1)],as.factor(test_SD.data$predict), plot="density", auto.key = list(columns = 2))
@@ -249,18 +360,25 @@ featurePlot(test_SD.data[, 3:(ncol(test_SD.data)-1)],as.factor(test_SD.data$pred
 label <- unique(data.table(vessel = gps.dt$vessel, coverage_name = gps.dt$coverage_name, 
                            StartTime = gps.dt$StartTime, StopTime = gps.dt$StopTime,
                            distance_sum = gps.dt$distance_sum, area = gps.dt$area))
+sandeel.dt <- data.table(sandeel.dt)
+nonsandeel.dt <- data.table(nonsandeel.dt)
 setDT(sandeel.dt)[setDT(label), on =. (YMD_time >= StartTime, 
                                        YMD_time <= StopTime,
                                        area == area, vessel == vessel), 
                   coverage_name := coverage_name] 
-
+setDT(nonsandeel.dt)[setDT(label), on =. (YMD_time >= StartTime, 
+                                       YMD_time <= StopTime,
+                                       area == area, vessel == vessel), 
+                  coverage_name := coverage_name]
 
 save(sandeel.dt, file="sandeel.Rdata")
+save(nonsandeel.dt, file="nonsandeel.Rdata")
 
-
-
-#== biological data ==#
+#=========================#
+#==   biological data   ==#
+#=========================#
 x <- data.table(matrix(ncol = 5, nrow = 0))
+## *change "test" to "train" if use 100% traindata ##
 for(i in 1:length(slda.lst)) {
   temp <- data.table(id = data.lst[[paste0(i,"test")]]$id, 
                      pred = predict(slda.lst[[i]], data.lst[[paste0(i,"test")]]), 
@@ -327,15 +445,22 @@ eros.lda <- eros.lda[Frequency %in% 200 & !category%in%"PSAND" & !pred%in%NA]
 eros.lda <- eros.lda[, c("id", "category","pred","YMD_time", "PingNo","school_area", "DepthStart", "DepthStop", "meanDepth", "area")]
 nrow(eros.lda[category == pred & school_area >=500])/nrow(eros.lda[school_area >=500])
 
-#== variable importance ==#
+#== variable importance ==# (use different algorithm with stepwise)
 varImp(slda.lst[[i]], scale = FALSE)
 plot(varImp(slda.lst[[i]], scale = FALSE))
 
 
+#== sandeel vs nonsandeel ==#
+lapply(c("Data/sandeel.Rdata", "Data/nonsandeel.Rdata"),load,.GlobalEnv)
+sandeel.dt$category_2 <- "SAND"
+nonsandeel.dt$category_2 <- "OTHER"
+data <- data.table(rbind(sandeel.dt, nonsandeel.dt))
 
 
 
-#== step-wise Discriminant analyses 1 time ==#
+#==================================================#
+####  Discriminant analyses 1 time (for test)   ####
+#==================================================#
 maxvar <-(ncol(train.data))-2
 direction <-"backward"
 slda1 <- train(category ~ ., data = train.data[, -c("id")],

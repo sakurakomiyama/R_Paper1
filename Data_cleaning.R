@@ -662,6 +662,9 @@ setDT(School.dt)[, school_circ:=(Perimeter^2)/(4*pi*school_area)]
 #== !! add vessel column !!choose correct vessel name!! ==#
 School.dt$vessel <- "SD1031" #"EROS"/"SD1032"/"SD1032"
 
+#== add bottom depth ==#
+School.dt$bottom_Depth <- School.dt$weighted_meanDepth / School.dt$nor_Depth
+
 
 #== save all pixel data !!choose correct name!! ==#
 #save(School.dt, file = "Data/School_EROS.Rdata")
